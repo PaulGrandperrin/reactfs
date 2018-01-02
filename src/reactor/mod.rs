@@ -686,7 +686,7 @@ enum FSCallStreamState {
     Pending{
         stream_id: StreamId
     },
-    Done
+    _Done // TODO: implement done state
 }
 
 /// `Stream` returned by `Handle::get_fs_call()` which will resolve to `FSRequest`s.
@@ -741,7 +741,7 @@ impl Stream for FSCallStream {
                     unreachable!("logic error in reactor: trying to get event from non-existing stream");
                 }
             },
-            FSCallStreamState::Done => {
+            FSCallStreamState::_Done => {
                 panic!("polled finished Stream");
             }
         }
