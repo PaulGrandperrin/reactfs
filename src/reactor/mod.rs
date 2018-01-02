@@ -1,7 +1,6 @@
 extern crate futures;
 //extern crate slab;
 
-use std::io;
 use std::fmt;
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
@@ -9,6 +8,8 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::collections::HashMap;
 
 use futures::prelude::*;
+
+use failure;
 //use slab::Slab;
 
 /* TODO
@@ -16,10 +17,7 @@ use futures::prelude::*;
  - check ids boundaries
  - communicate to the outsite StreamIds
  - use slab instead of hashmap
- - check error propagation
- - use failure create
  - maybe use future::try_ready! macro
- - implement other futures (read, write, sync/flush)
  - implenent other fscalls
  - implement end of stream of fscalls
  - use a proper logger
@@ -81,12 +79,12 @@ pub enum Event {
     ToFuture {
         event_id: EventId,
         task_id: TaskId,
-        event: FutureEvent
+        result: Result<FutureEvent, failure::Error>
     },
     ToStream {
         stream_id: StreamId,
         task_id: TaskId,
-        event: StreamEvent
+        result: Result<StreamEvent, failure::Error>
     }
 }
 
@@ -159,8 +157,8 @@ pub struct FSResponse {
 struct Inner {
     id_counter: u64, // incrementing counter of events and streams
     task_id_counter: u64,
-    events_to_future: HashMap<EventId, FutureEvent>,
-    events_to_streams: HashMap<StreamId, Vec<StreamEvent>>,
+    events_to_future: HashMap<EventId, Result<FutureEvent, failure::Error>>,
+    events_to_streams: HashMap<StreamId, Vec<Result<StreamEvent, failure::Error>>>,
     newly_spawned_tasks: Vec<(TaskId, SpawnedTask)>,
     current_task_id: Option<TaskId>,
     
@@ -377,14 +375,14 @@ impl Core {
 
                 // process event and extract the task_id we need to poll
                 task_id_to_poll = match event {
-                    Event::ToFuture{event_id, task_id, event} => {
-                        inner.events_to_future.insert(event_id, event);
+                    Event::ToFuture{event_id, task_id, result} => {
+                        inner.events_to_future.insert(event_id, result);
                         // return extracted task_id
                         task_id
                     },
-                    Event::ToStream{stream_id, task_id, event} => {
+                    Event::ToStream{stream_id, task_id, result} => {
                         if let Some(vec) = inner.events_to_streams.get_mut(&stream_id) {
-                            vec.push(event);
+                            vec.push(result);
                         } else {
                             unreachable!("logic error in reactor: trying to add event to non-existing stream");
                         }
@@ -451,7 +449,7 @@ pub struct FutureRead {
 
 impl Future for FutureRead {
     type Item=Vec<u8>;
-    type Error=io::Error;
+    type Error=failure::Error;
     
     fn poll(&mut self) -> futures::prelude::Poll<Self::Item, Self::Error> {
         // get mut ref to inner
@@ -483,12 +481,18 @@ impl Future for FutureRead {
             FutureReadState::Pending{event_id} => {
                 // if we have the result
                 match inner.events_to_future.remove(&event_id) {
-                    Some(FutureEvent::ReadResponse(ReadResponse{data})) => {
+                    Some(Ok(FutureEvent::ReadResponse(ReadResponse{data}))) => {
                         // update state
                         self.state = FutureReadState::Done;
                         
                         Ok(Async::Ready(data))
                     },
+                    Some(Err(e)) => {
+                        // update state
+                        self.state = FutureReadState::Done;
+
+                        Err(e)
+                    }
                     None => {
                         Ok(Async::NotReady)
                     },
@@ -541,7 +545,7 @@ pub struct FutureWrite {
 
 impl Future for FutureWrite {
     type Item=();
-    type Error=io::Error;
+    type Error=failure::Error;
     
     fn poll(&mut self) -> futures::prelude::Poll<Self::Item, Self::Error> {
         // get mut ref to inner
@@ -572,10 +576,14 @@ impl Future for FutureWrite {
                 FutureWriteState::Pending{event_id} => {
                     // if we have the result
                     match inner.events_to_future.remove(&event_id) {
-                        Some(FutureEvent::WriteResponse(WriteResponse{})) => {
+                        Some(Ok(FutureEvent::WriteResponse(WriteResponse{}))) => {
                             // update state and return status
                             (FutureWriteState::Done, Ok(Async::Ready(())))
                         },
+                        Some(Err(e)) => {
+                            // update state and return status
+                            (FutureWriteState::Done, Err(e))
+                        }
                         None => {
                             (FutureWriteState::Pending{event_id}, Ok(Async::NotReady))
                         },
@@ -612,7 +620,7 @@ pub struct FutureFlush {
 
 impl Future for FutureFlush {
     type Item=();
-    type Error=io::Error;
+    type Error=failure::Error;
     
     fn poll(&mut self) -> futures::prelude::Poll<Self::Item, Self::Error> {
         // get mut ref to inner
@@ -644,12 +652,18 @@ impl Future for FutureFlush {
             FutureFlushState::Pending{event_id} => {
                 // if we have the result
                 match inner.events_to_future.remove(&event_id) {
-                    Some(FutureEvent::FlushResponse(FlushResponse{})) => {
+                    Some(Ok(FutureEvent::FlushResponse(FlushResponse{}))) => {
                         // update state
                         self.state = FutureFlushState::Done;
                         
                         Ok(Async::Ready(()))
                     },
+                    Some(Err(e)) => {
+                        // update state
+                        self.state = FutureFlushState::Done;
+
+                        Err(e)
+                    }
                     None => {
                         Ok(Async::NotReady)
                     },
@@ -685,7 +699,7 @@ pub struct FSCallStream {
 
 impl Stream for FSCallStream {
     type Item = FSRequest;
-    type Error = io::Error;
+    type Error = failure::Error;
 
     fn poll(&mut self) -> futures::prelude::Poll<Option<Self::Item>, Self::Error> {
         println!("FSCallStream: got polled");
@@ -712,9 +726,12 @@ impl Stream for FSCallStream {
                 // return one request if we have one
                 if let Some(vec) = inner.events_to_streams.get_mut(&stream_id) {
                     match vec.pop() {
-                        Some(StreamEvent::FSRequest(fs_request)) => {
+                        Some(Ok(StreamEvent::FSRequest(fs_request))) => {
                             Ok(Async::Ready(Some(fs_request)))
                         },
+                        Some(Err(e)) => {
+                            Err(e)
+                        }
                         // TODO implement end-of-stream event
                         None => {
                             Ok(Async::NotReady)

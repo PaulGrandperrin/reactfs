@@ -44,18 +44,23 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
 
                 bd.seek(SeekFrom::Start(r.offset)).unwrap();
                 let mut data = vec![0;r.length as usize]; // maybe do not initialize it
-                bd.read_exact(&mut data).unwrap();
+                let res = bd.read_exact(&mut data);
 
-                let event =
-                    Event::ToFuture {
-                        event_id: r.event_id,
-                        task_id: r.task_id,
-                        event: FutureEvent::ReadResponse (
-                            ReadResponse {
+                let result = match res {
+                    Ok(()) => 
+                        Ok(FutureEvent::ReadResponse(ReadResponse {
                                 data
-                            }
-                        )
-                    };
+                        }))
+                    ,
+                    Err(e) => 
+                        Err(e.into())
+                };
+
+                let event = Event::ToFuture {
+                    event_id: r.event_id,
+                    task_id: r.task_id,
+                    result
+                };
 
                 write!(log, "sent: {:?}\n", event).unwrap();
 
@@ -64,16 +69,21 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
             Ok(BDRequest::Write(w)) => {
                 
                 bd.seek(SeekFrom::Start(w.offset)).unwrap();
-                bd.write_all(&w.data).unwrap();
+                let res = bd.write_all(&w.data);
 
-                let event = 
-                    Event::ToFuture {
-                        event_id: w.event_id,
-                        task_id: w.task_id,
-                        event: FutureEvent::WriteResponse (
-                            WriteResponse{}
-                        )
-                    };
+                let result = match res {
+                    Ok(()) => 
+                        Ok(FutureEvent::WriteResponse(WriteResponse{}))
+                    ,
+                    Err(e) => 
+                        Err(e.into())
+                };
+
+                let event = Event::ToFuture {
+                    event_id: w.event_id,
+                    task_id: w.task_id,
+                    result
+                };
 
                 write!(log, "sent: {:?}\n", event).unwrap();
 
@@ -87,9 +97,7 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
                     Event::ToFuture {
                         event_id: f.event_id,
                         task_id: f.task_id,
-                        event: FutureEvent::FlushResponse (
-                            FlushResponse{}
-                        )
+                        result: Ok(FutureEvent::FlushResponse(FlushResponse{}))
                     };
 
                 write!(log, "sent: {:?}\n", event).unwrap();
