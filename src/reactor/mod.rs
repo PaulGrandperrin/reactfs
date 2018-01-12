@@ -1,3 +1,19 @@
+//! This module implements the reactor pattern to allow asynchronous processing
+//! of requests.
+//!
+//! I tried to write this module from first principle to better understand the
+//! design decision behind `tokio`.
+//! I did however stole many design ideas and tried to use as best as I could
+//! the same terminology.
+//!
+//! This design is at the same time:
+//!
+//! * More specific and simpler because it is tailored for the block device use case
+//!
+//! * More generic and more complex because it is intented to be generic over the environment
+//!   (kernel/nostd or userland/std) and the IO system.
+
+
 extern crate futures;
 //extern crate slab;
 
@@ -371,7 +387,7 @@ impl Core {
                 // read event from channel
                 println!("reactor: waiting on channel");
                 let event = self.receiver.recv().unwrap();    
-                println!("reactor: received event {:?}", event);
+                //println!("reactor: received event {:?}", event);
 
                 // process event and extract the task_id we need to poll
                 task_id_to_poll = match event {
