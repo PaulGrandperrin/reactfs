@@ -130,18 +130,20 @@ fn _read_u64(h: &Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Er
     })
 }
 
-#[async]
-fn read_internal_node(h: Handle, offset: u64) -> Result<TreeNode, failure::Error> {
-	let mem = await!(h.read(offset*4096, 4096))?;
-	let node = TreeNode::from_mem(mem);
-	//intern_node.print_keys();
-	Ok(node)
+fn read_internal_node(h: Handle, offset: u64) -> impl Future<Item=TreeNode, Error=failure::Error> {
+	async_block!{
+		let mem = await!(h.read(offset*4096, 4096))?;
+		let node = TreeNode::from_mem(mem);
+		//intern_node.print_keys();
+		Ok(node)
+	}
 }
 
-#[async]
-fn write_internal_node(h: Handle, offset: u64, intern_node: InternalNode) -> Result<(), failure::Error> {
-	await!(h.write(intern_node.into_mem(), offset*4096))?;
-	Ok(())
+fn write_internal_node(h: Handle, offset: u64, intern_node: InternalNode) -> impl Future<Item=(), Error=failure::Error> {
+	async_block!{
+		await!(h.write(intern_node.into_mem(), offset*4096))?;
+		Ok(())
+	}
 }
 
 struct Uberblock {
@@ -203,84 +205,93 @@ impl Uberblock {
 //	}
 //}
 
-#[async]
-fn create_tree(handle: Handle, uberblock: Box<Uberblock>) -> Result<(), failure::Error> {
-    let intern_node = InternalNode::new_empty();
-    await!(write_internal_node(handle.clone(), uberblock.tree_root_offset, intern_node))?;
+fn create_tree(handle: Handle, uberblock: Box<Uberblock>) -> impl Future<Item=(), Error=failure::Error> {
+    async_block!{
+	    let intern_node = InternalNode::new_empty();
+	    await!(write_internal_node(handle.clone(), uberblock.tree_root_offset, intern_node))?;
 
-    Ok(())
+	    Ok(())
+	}
 }
 
-#[async]
-fn format_fs(handle: Handle) -> Result<(), failure::Error> {
-	let writes: Vec<_> = (0..10)
-		.map(|i| {
-			let s: Box<[u8]> = Uberblock::new(i, 10, 11).into_sectorbuf();
-			handle.write(s.into_vec(), i*4096)
-		})
-		.collect();
+fn format_fs(handle: Handle) -> impl Future<Item=(), Error=failure::Error> {
+	async_block!{
+		let writes: Vec<_> = (0..10)
+			.map(|i| {
+				let s: Box<[u8]> = Uberblock::new(i, 10, 11).into_sectorbuf();
+				handle.write(s.into_vec(), i*4096)
+			})
+			.collect();
 
-	await!(future::join_all(writes))?;
+		await!(future::join_all(writes))?;
 
-	let mut u = Uberblock::new(9, 10, 11);
-	await!(create_tree(handle.clone(), Box::new(u)))?;
+		let mut u = Uberblock::new(9, 10, 11);
+		await!(create_tree(handle.clone(), Box::new(u)))?;
 
-	Ok(())
+		Ok(())
+	}
 }
 
-#[async]
-fn read_latest_uberblock(handle: Handle) -> Result<Uberblock, failure::Error> {
-	let uberblocks = await!(handle.read(0, 4096*10))?;
-	let uberblock = uberblocks.chunks(4096)
-		.map(|chunk| {Uberblock::from_slice(chunk)})
-		.max_by(|x, y| {
-			x.tgx.cmp(&y.tgx)
-		}).unwrap();
+fn read_latest_uberblock(handle: Handle) -> impl Future<Item=Uberblock, Error=failure::Error> {
+	async_block!{
+		let uberblocks = await!(handle.read(0, 4096*10))?;
+		let uberblock = uberblocks.chunks(4096)
+			.map(|chunk| {Uberblock::from_slice(chunk)})
+			.max_by(|x, y| {
+				x.tgx.cmp(&y.tgx)
+			}).unwrap();
 
-	Ok(uberblock)
+		Ok(uberblock)
+	}
 }
 
-#[async]
-pub fn test(handle: Handle) -> Result<(), failure::Error> {
-	await!(format_fs(handle.clone()))?;
-    let a= vec![1];
-    //let b = &a;
-    let u = await!(read_latest_uberblock(handle.clone()))?;
-    //println!("{:?}", b);
+
+pub fn test(handle: Handle) -> impl Future<Item=(), Error=failure::Error> {
+	async_block!{
+		await!(format_fs(handle.clone()))?;
+	    let a= vec![1];
+	    //let b = &a;
+	    let u = await!(read_latest_uberblock(handle.clone()))?;
+	    //println!("{:?}", b);
 
 
-    insert_in_tree(handle.clone(), &u);
+	    insert_in_tree(handle.clone(), &u);
 
-    println!("{:?}", u);
-    Ok(())
+	    println!("{:?}", u);
+	    Ok(())
+	}
 }
 
-#[async(boxed)]
-fn insert_in_tree(handle: Handle, uberblock: *const Uberblock) -> Result<(), failure::Error> {
-    let uberblock: &Uberblock = unsafe{&*uberblock};
-    let mut intern_node = await!(read_internal_node(handle.clone(), uberblock.tree_root_offset))?;
-    match intern_node {
-    	TreeNode::Internal(n) => {
-    		
-    	},
-    	TreeNode::Leaf(n) => {
-    		
-    	}
-    };
-    //await!(write_internal_node(handle.clone(), 0, intern_node))?;
-    
-    //let intern_node = await!(read_internal_node(handle.clone(), 0))?;
-    //intern_node.print_keys();
-    
-    Ok::<(),failure::Error>(())
+
+fn insert_in_tree(handle: Handle, uberblock: *const Uberblock) -> Box<impl Future<Item=(), Error=failure::Error>> {
+    Box::new(async_block!{
+	    let uberblock: &Uberblock = unsafe{&*uberblock};
+	    let mut intern_node = await!(read_internal_node(handle.clone(), uberblock.tree_root_offset))?;
+	    match intern_node {
+	    	TreeNode::Internal(n) => {
+	    		
+	    	},
+	    	TreeNode::Leaf(n) => {
+	    		
+	    	}
+	    };
+	    //await!(write_internal_node(handle.clone(), 0, intern_node))?;
+	    
+	    //let intern_node = await!(read_internal_node(handle.clone(), 0))?;
+	    //intern_node.print_keys();
+	    
+	    Ok::<(),failure::Error>(())
+	})
 }
 
-#[async]
-pub fn read_tree(handle: Handle) -> Result<(), failure::Error> {
-    let intern_node = await!(read_internal_node(handle.clone(), 0))?;
-    
-    
-    Ok::<(),failure::Error>(())
+
+pub fn read_tree(handle: Handle) -> impl Future<Item=(), Error=failure::Error> {
+	async_block!{
+	    let intern_node = await!(read_internal_node(handle.clone(), 0))?;
+	    
+	    
+	    Ok::<(),failure::Error>(())
+	}
 }
 
 
