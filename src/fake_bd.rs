@@ -37,7 +37,7 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
 
     loop {
         let event = receiver.recv();
-        write!(log, "received : {:?}\n", event).unwrap();
+        //write!(log, "received : {:?}\n", event).unwrap();
 
         match event {
             Ok(BDRequest::Read(r)) => {
@@ -62,7 +62,7 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
                     result
                 };
 
-                write!(log, "sent: {:?}\n", event).unwrap();
+                //write!(log, "sent: {:?}\n", event).unwrap();
 
                 sender.send(event).unwrap();
             },
@@ -85,7 +85,7 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
                     result
                 };
 
-                write!(log, "sent: {:?}\n", event).unwrap();
+                //write!(log, "sent: {:?}\n", event).unwrap();
 
                 sender.send(event).unwrap();
             },
@@ -100,12 +100,12 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
                         result: Ok(FutureEvent::FlushResponse(FlushResponse{}))
                     };
 
-                write!(log, "sent: {:?}\n", event).unwrap();
+                //write!(log, "sent: {:?}\n", event).unwrap();
 
                 sender.send(event).unwrap();
             },
             Err(e) => {
-                println!("bd_thread failed: {:?}", e);
+                println!("bd_thread: channel closed");
                 break;
             }
         }

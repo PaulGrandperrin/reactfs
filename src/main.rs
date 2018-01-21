@@ -1,8 +1,10 @@
-//#![allow(dead_code, unused)]
-#![feature(proc_macro, conservative_impl_trait, generators,universal_impl_trait, generator_trait)]
+#![allow(dead_code, unused)]
+#![feature(proc_macro, conservative_impl_trait, generators,universal_impl_trait, generator_trait, nll)]
 extern crate futures_await as futures;
 extern crate byteorder;
 extern crate failure;
+#[macro_use] extern crate enum_primitive_derive;
+extern crate num_traits;
 
 use std::thread;
 use std::sync::mpsc::channel;
@@ -13,6 +15,8 @@ use byteorder::{ByteOrder};
 pub mod reactor;
 pub mod fake_bd;
 pub mod failures;
+pub mod cow_btree;
+pub mod core;
 
 use reactor::*;
 
@@ -36,7 +40,7 @@ fn _write_fibonacci_rec(h:Handle, n: u64) -> Result<(), failure::Error> {
                 _write_u64(&h, 0, 0),
                 _write_u64(&h, 1, 1)
                 );
-            await!(f)?;
+            await!(f)?; 
         },
         _ => {
             await!(_write_fibonacci_rec(h.clone(), n-1))?;
@@ -71,8 +75,15 @@ fn _write_fibonacci_seq(h:Handle, n: u64) -> Result<(), failure::Error> {
 }
 
 #[async]
-fn read_error(h:Handle) -> Result<u64, failure::Error> {
+fn _read_error(h:Handle) -> Result<u64, failure::Error> {
     await!(_read_u64(&h, 1000000000))
+}
+
+#[derive(Debug)]
+enum Test {
+    A(Vec<u64>),
+    B(Vec<u64>),
+    C(Vec<u64>)
 }
 
 fn main() {
@@ -90,7 +101,14 @@ fn main() {
     let handle = core.handle();
     
     //let f = write_fibonacci_rec(handle, 50);
-    let f = read_error(handle);
+    //let f = _write_fibonacci_rec(handle, 10);
+
+
+    let f = async_block! {
+        use cow_btree::*;
+        await!(test(handle.clone()))?;        
+        Ok::<(),failure::Error>(())
+    };
 
     println!("starting reactor");
     let r = core.run(f);

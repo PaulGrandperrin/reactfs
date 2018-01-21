@@ -3,9 +3,14 @@ name = "reactfs"
 version = "0.1.0"
 authors = ["Paul Grandperrin <paul.grandperrin@gmail.com>"]
 
+#[dependencies.futures-await]
+#path = "../futures-await"
+
 [dependencies]
 futures-await = "0.1"
 futures = "0.1"
 slab = "0.4"
 byteorder = "1"
 failure = "0.1"
+enum-primitive-derive = "^0.1"
+num-traits = "^0.1"
