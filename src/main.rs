@@ -1,5 +1,5 @@
 //#![allow(dead_code, unused)]
-#![feature(proc_macro, conservative_impl_trait, generators,universal_impl_trait, generator_trait)]
+#![feature(proc_macro, conservative_impl_trait, generators,universal_impl_trait, generator_trait, nll)]
 extern crate futures_await as futures;
 extern crate byteorder;
 extern crate failure;
@@ -16,63 +16,19 @@ pub mod failures;
 
 use reactor::*;
 
-fn _write_u64(h: &Handle, n: u64, offset: u64) -> FutureWrite {
-    let mut v = vec![0;8];
-    byteorder::BigEndian::write_u64(&mut v, n);
-    h.write(v, offset*8)
-}
 
-fn _read_u64(h: &Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
+fn _read_u64<'a>(h: &'a Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> +'a {
     h.read(offset*8, 8).map(|v| {
         byteorder::BigEndian::read_u64(&v)
     })
 }
 
-#[async(boxed)]
-fn _write_fibonacci_rec(h:Handle, n: u64) -> Result<(), failure::Error> {
-    match n {
-        0|1 => {
-            let f = Future::join(
-                _write_u64(&h, 0, 0),
-                _write_u64(&h, 1, 1)
-                );
-            await!(f)?;
-        },
-        _ => {
-            await!(_write_fibonacci_rec(h.clone(), n-1))?;
-            let f = Future::join(
-                _read_u64(&h, n-1),
-                _read_u64(&h, n-2)
-            );
-            let r = await!(f)?;
-            await!(_write_u64(&h, r.0+r.1, n))?;
-        }
+
+
+fn read_error<'a>(h: &'a Handle) -> impl Future<Item=u64, Error=failure::Error> + 'a {
+    async_block!{
+        await!(_read_u64(&h, 1000000000))
     }
-    Ok(())
-}
-
-#[async]
-fn _write_fibonacci_seq(h:Handle, n: u64) -> Result<(), failure::Error> {
-    let f = Future::join(
-        _write_u64(&h, 0, 0),
-        _write_u64(&h, 1, 1)
-        );
-    await!(f)?;
-
-    for i in 2..n {
-        let f = Future::join(
-            _read_u64(&h, i-1),
-            _read_u64(&h, i-2)
-        );
-        let r = await!(f)?;
-        await!(_write_u64(&h, r.0+r.1, i))?;
-    }
-    Ok(())
-}
-
-#[async]
-fn read_error(h:Handle) -> Result<u64, failure::Error> {
-    await!(_read_u64(&h, 1000000000))
 }
 
 fn main() {
@@ -86,12 +42,12 @@ fn main() {
         fake_bd::fake_bd_loop(react_sender_bd, bd_receiver);
     });
 
-    let mut core = Core::new(bd_sender, fs_sender, react_receiver);
+    let core = Core::new(bd_sender, fs_sender, react_receiver);
     let handle = core.handle();
     
     //let f = write_fibonacci_rec(handle, 50);
     let f = read_error(handle);
-
+    
     println!("starting reactor");
     let r = core.run(f);
     println!("final result: {:?}", r);

@@ -202,60 +202,22 @@ impl Inner {
 /// A handle to the `reactor::Inner` structure of `reactor::Core` (```Weak<RefCell<Inner>>```)
 ///
 /// It's used to create new I/O `Future`s and `Stream`s and spawn new `SpawnedTask`s.
-#[derive(Clone)]
 pub struct Handle {
-    inner: Weak<RefCell<Inner>>
+    inner: RefCell<Inner>
 }
 
 impl Handle {
     /// Reads `length` bytes at `offset` and returns a `ReadFuture` which resolves to `Vec<u8>`.
-    pub fn read(&self, offset: u64, length: u64) -> FutureRead {
+    pub fn read<'a>(&'a self, offset: u64, length: u64) -> FutureRead {
         FutureRead {
             state: FutureReadState::NotYet {
                 offset,
                 length
             },
-            inner: self.inner.clone()
+            inner: &self
         }
     }
 
-    /// Writes `data` bytes at `offset` and returns a `WriteFuture` which resolves when the write is done`.
-    pub fn write(&self, data: Vec<u8>, offset: u64) -> FutureWrite {
-        FutureWrite {
-            state: FutureWriteState::NotYet {
-                data,
-                offset
-            },
-            inner: self.inner.clone()
-        }
-    }
-
-    /// Flush block device queue and returns a `FlushFuture` which resolves when the flush is done`.
-    pub fn flush(&self) -> FutureFlush {
-        FutureFlush {
-            state: FutureFlushState::NotYet {
-            },
-            inner: self.inner.clone()
-        }
-    }
-
-    /// Return a `FSCallStream` which resolves to `FSRequest`s.
-    pub fn recv_fs_request(&self) -> FSCallStream {
-        FSCallStream {
-            state: FSCallStreamState::NotYet,
-            inner: self.inner.clone()
-        }
-    }
-
-    /// Sends `fs_response` back through the filesystem channel
-    pub fn send_fs_response(&self, fs_response: FSResponse) {
-        // get mut ref to inner
-        let inner = self.inner.upgrade().unwrap();
-        let inner = inner.borrow();
-
-        inner.fs_sender.send(fs_response)
-            .expect("reactor::Handle::send_fs_response: filesystem channel has been closed");
-    }
 
     /// Spawns a new `SpawnedTask` in the event loop from a `Future` or a `Stream`
     ///
@@ -277,8 +239,7 @@ impl Handle {
         let task_id;
         {
             // get mut ref to inner
-            let inner = self.inner.upgrade().unwrap();
-            let mut inner = inner.borrow_mut();
+            let mut inner = self.inner.borrow_mut();
 
             // check state
             assert_ne!(inner.current_task_id, None, "trying to spawn a task when the reactor is not running") ;
@@ -299,8 +260,7 @@ impl Handle {
         }
 
         // get mut ref to inner
-        let inner = self.inner.upgrade().unwrap();
-        let mut inner = inner.borrow_mut();
+        let mut inner = self.inner.borrow_mut();
 
         // restore saved former current_task_id
         inner.current_task_id = saved_current_task_id;
@@ -320,7 +280,7 @@ impl Handle {
 /// It holds a reference counter reference to `Inner` as ```Rc<RefCell<Inner>>```.
 pub struct Core {
     receiver: Receiver<Event>,
-    inner: Rc<RefCell<Inner>>,
+    inner: Handle,
 }
 
 impl Core {
@@ -336,13 +296,13 @@ impl Core {
     pub fn new(bd_sender: Sender<BDRequest>, fs_sender: Sender<FSResponse>, receiver: Receiver<Event>) -> Core {
         Core {
             receiver,
-            inner: Rc::new(RefCell::new(Inner::new(bd_sender, fs_sender)))
+            inner: Handle{inner:RefCell::new(Inner::new(bd_sender, fs_sender))}
         }
     }
 
     /// Returns a `Handle` to the `Inner` state of the `reactor`.
-    pub fn handle(&mut self) -> Handle {
-        Handle {inner: Rc::downgrade(&self.inner)}
+    pub fn handle<'a>(&'a self) -> &'a Handle {
+        &self.inner
     }
 
     /// Runs a `future` until completion.
@@ -352,14 +312,14 @@ impl Core {
     /// Returns the `Result` of `future` if any.
     ///
     /// If `future` is never resolved, this function never returns
-    pub fn run<F>(self, mut future: F) -> Result<F::Item, F::Error>
+    pub fn run<F>(&self, mut future: F) -> Result<F::Item, F::Error>
     where F: Future {
 
         // list of active tasks
         let mut tasks: HashMap<TaskId, SpawnedTask> = HashMap::new();
         {
             // borrow inner
-            let mut inner = self.inner.borrow_mut();
+            let mut inner = self.inner.inner.borrow_mut();
             
             // initialize current_task_id to main task special id 0
             inner.current_task_id = Some(TaskId(0));
@@ -377,7 +337,7 @@ impl Core {
             let task_id_to_poll;
             {
                 // borrow inner
-                let mut inner = self.inner.borrow_mut();
+                let mut inner = self.inner.inner.borrow_mut();
 
                 // move the new tasks to our map of tasks
                 for (task_id, task) in inner.newly_spawned_tasks.drain(0..) {
@@ -456,21 +416,20 @@ enum FutureReadState {
 }
 
 /// `Future` returned by `Handle::read()` which will resolve to a `Vec<u8>` on completion.
-#[derive(Debug)]
+//#[derive(Debug)]
 #[must_use = "futures do nothing unless polled"]
-pub struct FutureRead {
+pub struct FutureRead<'a> {
     state: FutureReadState,
-    inner: Weak<RefCell<Inner>>
+    inner: &'a Handle
 }
 
-impl Future for FutureRead {
+impl<'a> Future for FutureRead<'a> {
     type Item=Vec<u8>;
     type Error=failure::Error;
     
     fn poll(&mut self) -> futures::prelude::Poll<Self::Item, Self::Error> {
         // get mut ref to inner
-        let inner = self.inner.upgrade().unwrap();
-        let mut inner = inner.borrow_mut();
+        let mut inner = self.inner.inner.borrow_mut();
 
         let task_id = inner.current_task_id
             .expect("trying to poll a future when the reactor is not running");
@@ -552,21 +511,19 @@ impl FutureWriteState {
 }
 
 /// `Future` returned by `Handle::write()` which will resolve to `()` when completed.
-#[derive(Debug)]
 #[must_use = "futures do nothing unless polled"]
-pub struct FutureWrite {
+pub struct FutureWrite<'a> {
     state: FutureWriteState,
-    inner: Weak<RefCell<Inner>>
+    inner: &'a Handle
 }
 
-impl Future for FutureWrite {
+impl<'a> Future for FutureWrite<'a> {
     type Item=();
     type Error=failure::Error;
     
     fn poll(&mut self) -> futures::prelude::Poll<Self::Item, Self::Error> {
         // get mut ref to inner
-        let inner = self.inner.upgrade().unwrap();
-        let mut inner = inner.borrow_mut();
+        let mut inner = self.inner.inner.borrow_mut();
 
         let task_id = inner.current_task_id
             .expect("trying to poll a future when the reactor is not running");
@@ -627,21 +584,19 @@ enum FutureFlushState {
 }
 
 /// `Future` returned by `Handle::flush()` which will resolve to `()` when completed.
-#[derive(Debug)]
 #[must_use = "futures do nothing unless polled"]
-pub struct FutureFlush {
+pub struct FutureFlush<'a> {
     state: FutureFlushState,
-    inner: Weak<RefCell<Inner>>
+    inner: &'a Handle
 }
 
-impl Future for FutureFlush {
+impl<'a> Future for FutureFlush<'a> {
     type Item=();
     type Error=failure::Error;
     
     fn poll(&mut self) -> futures::prelude::Poll<Self::Item, Self::Error> {
         // get mut ref to inner
-        let inner = self.inner.upgrade().unwrap();
-        let mut inner = inner.borrow_mut();
+        let mut inner = self.inner.inner.borrow_mut();
 
         let task_id = inner.current_task_id
             .expect("trying to poll a future when the reactor is not running");
@@ -706,22 +661,20 @@ enum FSCallStreamState {
 }
 
 /// `Stream` returned by `Handle::get_fs_call()` which will resolve to `FSRequest`s.
-#[derive(Debug)]
 #[must_use = "futures do nothing unless polled"]
-pub struct FSCallStream {
+pub struct FSCallStream<'a> {
     state: FSCallStreamState,
-    inner: Weak<RefCell<Inner>>
+    inner: &'a Handle
 }
 
-impl Stream for FSCallStream {
+impl<'a> Stream for FSCallStream<'a> {
     type Item = FSRequest;
     type Error = failure::Error;
 
     fn poll(&mut self) -> futures::prelude::Poll<Option<Self::Item>, Self::Error> {
         println!("FSCallStream: got polled");
         // get mut ref to inner
-        let inner = self.inner.upgrade().unwrap();
-        let mut inner = inner.borrow_mut();
+        let mut inner = self.inner.inner.borrow_mut();
 
         inner.current_task_id.expect("trying to poll a future when the reactor is not running");
 
