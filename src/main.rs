@@ -106,7 +106,7 @@ fn main() {
 
     let f = async_block! {
         use cow_btree::*;
-        await!(test(handle.clone()))?;        
+        await!(test(&handle))?;        
         Ok::<(),failure::Error>(())
     };
 
