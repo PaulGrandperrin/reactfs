@@ -104,8 +104,8 @@ pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
 
                 sender.send(event).unwrap();
             },
-            Err(e) => {
-                println!("bd_thread failed: {:?}", e);
+            Err(_) => {
+                // the channel is closed, exit loop
                 break;
             }
         }

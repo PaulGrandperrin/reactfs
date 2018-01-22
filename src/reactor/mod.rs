@@ -14,6 +14,21 @@
 //!   (kernel/nostd or userland/std) and the IO system.
 
 
+/* TODO
+ - factorize Future{Read,Write,Flush}::poll()
+ - check ids boundaries
+ - communicate to the outsite StreamIds
+ - use slab instead of hashmap
+ - maybe use future::try_ready! macro
+ - implenent other fscalls
+ - implement end of stream of fscalls
+ - use a proper logger
+ - write tests (quickcheck)
+*/
+
+#[cfg(test)]
+mod tests;
+
 extern crate futures;
 //extern crate slab;
 
@@ -28,17 +43,6 @@ use futures::prelude::*;
 use failure;
 //use slab::Slab;
 
-/* TODO
- - factorize Future{Read,Write,Flush}::poll()
- - check ids boundaries
- - communicate to the outsite StreamIds
- - use slab instead of hashmap
- - maybe use future::try_ready! macro
- - implenent other fscalls
- - implement end of stream of fscalls
- - use a proper logger
- - write tests (quickcheck)
-*/
 
 /// The ID of a `Stream`
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -764,3 +768,4 @@ impl Stream for FSCallStream {
         
     }
 }
+
