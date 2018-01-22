@@ -6,13 +6,19 @@ use std::sync::mpsc::channel;
 use ::*;
 use super::*;
 
+
 /* TODO
  - use in memory fake block device
  - factorize code
 */
 
-#[test]
-fn fibonacci_seq() {
+#[quickcheck]
+fn fibonacci_seq(size: u8) {
+
+	if size > 50 {
+		return;
+	}
+
     let (bd_sender, bd_receiver) = channel::<BDRequest>();
     let (fs_sender, _fs_receiver) = channel::<FSResponse>();
     let (react_sender, react_receiver) = channel::<Event>();
@@ -25,14 +31,19 @@ fn fibonacci_seq() {
     let mut core = Core::new(bd_sender, fs_sender, react_receiver);
     let handle = core.handle();
     
-    let f = write_fibonacci_seq(handle, 50);
+    let f = write_fibonacci_seq(handle, size as u64);
 
     let r = core.run(f);
     assert!(r.is_ok());
 }
 
-#[test]
-fn fibonacci_rec() {
+#[quickcheck]
+fn fibonacci_rec(size: u8) {
+
+	if size > 50 {
+		return;
+	}
+
     let (bd_sender, bd_receiver) = channel::<BDRequest>();
     let (fs_sender, _fs_receiver) = channel::<FSResponse>();
     let (react_sender, react_receiver) = channel::<Event>();
@@ -45,11 +56,12 @@ fn fibonacci_rec() {
     let mut core = Core::new(bd_sender, fs_sender, react_receiver);
     let handle = core.handle();
     
-    let f = write_fibonacci_rec(handle, 50);
+    let f = write_fibonacci_rec(handle, size as u64);
 
     let r = core.run(f);
     assert!(r.is_ok());
 }
+
 
 #[test]
 fn error_propagation() {

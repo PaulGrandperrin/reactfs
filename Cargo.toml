@@ -9,3 +9,7 @@ futures = "0.1"
 slab = "0.4"
 byteorder = "1"
 failure = "0.1"
+
+[dev-dependencies]
+quickcheck = { version = "0.6", features = ["unstable"]}
+quickcheck_macros = "0.6"
