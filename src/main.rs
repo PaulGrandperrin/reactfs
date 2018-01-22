@@ -10,6 +10,9 @@ extern crate failure;
 
 #[cfg(test)]
 extern crate quickcheck;
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
 
 /*
 use std::thread;

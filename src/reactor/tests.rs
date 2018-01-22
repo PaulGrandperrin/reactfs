@@ -12,54 +12,46 @@ use super::*;
  - factorize code
 */
 
-#[quickcheck]
-fn fibonacci_seq(size: u8) {
+proptest! {
+	#[test]
+	fn fibonacci_seq(size in 0u64..20) {
+	    let (bd_sender, bd_receiver) = channel::<BDRequest>();
+	    let (fs_sender, _fs_receiver) = channel::<FSResponse>();
+	    let (react_sender, react_receiver) = channel::<Event>();
 
-	if size > 50 {
-		return;
+	    let react_sender_bd = react_sender.clone();
+	    let _bd_thread = thread::spawn(move || {
+	        fake_bd::fake_bd_loop(react_sender_bd, bd_receiver);
+	    });
+
+	    let mut core = Core::new(bd_sender, fs_sender, react_receiver);
+	    let handle = core.handle();
+	    
+	    let f = write_fibonacci_seq(handle, size);
+
+	    let r = core.run(f);
+	    assert!(r.is_ok());
 	}
 
-    let (bd_sender, bd_receiver) = channel::<BDRequest>();
-    let (fs_sender, _fs_receiver) = channel::<FSResponse>();
-    let (react_sender, react_receiver) = channel::<Event>();
+	#[test]
+	fn fibonacci_rec(size in 0u64..20) {
+	    let (bd_sender, bd_receiver) = channel::<BDRequest>();
+	    let (fs_sender, _fs_receiver) = channel::<FSResponse>();
+	    let (react_sender, react_receiver) = channel::<Event>();
 
-    let react_sender_bd = react_sender.clone();
-    let _bd_thread = thread::spawn(move || {
-        fake_bd::fake_bd_loop(react_sender_bd, bd_receiver);
-    });
+	    let react_sender_bd = react_sender.clone();
+	    let _bd_thread = thread::spawn(move || {
+	        fake_bd::fake_bd_loop(react_sender_bd, bd_receiver);
+	    });
 
-    let mut core = Core::new(bd_sender, fs_sender, react_receiver);
-    let handle = core.handle();
-    
-    let f = write_fibonacci_seq(handle, size as u64);
+	    let mut core = Core::new(bd_sender, fs_sender, react_receiver);
+	    let handle = core.handle();
+	    
+	    let f = write_fibonacci_rec(handle, size as u64);
 
-    let r = core.run(f);
-    assert!(r.is_ok());
-}
-
-#[quickcheck]
-fn fibonacci_rec(size: u8) {
-
-	if size > 50 {
-		return;
+	    let r = core.run(f);
+	    assert!(r.is_ok());
 	}
-
-    let (bd_sender, bd_receiver) = channel::<BDRequest>();
-    let (fs_sender, _fs_receiver) = channel::<FSResponse>();
-    let (react_sender, react_receiver) = channel::<Event>();
-
-    let react_sender_bd = react_sender.clone();
-    let _bd_thread = thread::spawn(move || {
-        fake_bd::fake_bd_loop(react_sender_bd, bd_receiver);
-    });
-
-    let mut core = Core::new(bd_sender, fs_sender, react_receiver);
-    let handle = core.handle();
-    
-    let f = write_fibonacci_rec(handle, size as u64);
-
-    let r = core.run(f);
-    assert!(r.is_ok());
 }
 
 
