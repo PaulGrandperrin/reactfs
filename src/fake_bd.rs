@@ -22,7 +22,7 @@ use reactor::{Event};
 ///
 /// All operations are recorded in the file `bd.log`. 
 pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
-	
+    
     let mut bd = OpenOptions::new()
         .read(true)
         .write(true)
