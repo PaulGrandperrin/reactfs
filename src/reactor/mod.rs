@@ -13,7 +13,6 @@
 //! * More generic and more complex because it is intented to be generic over the environment
 //!   (kernel/nostd or userland/std) and the IO system.
 
-
 /* TODO
  - factorize Future{Read,Write,Flush}::poll()
  - check ids boundaries

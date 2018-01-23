@@ -6,7 +6,6 @@ use std::sync::mpsc::channel;
 use ::*;
 use super::*;
 
-
 /* TODO
  - use in memory fake block device
  - factorize code

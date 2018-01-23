@@ -3,17 +3,16 @@
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
-
 extern crate futures_await as futures;
 extern crate byteorder;
-extern crate failure;
+extern crate itertools;
+#[macro_use] extern crate failure;
 
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
 #[macro_use]
 extern crate proptest;
-
 /*
 use std::thread;
 use std::sync::mpsc::channel;
@@ -22,15 +21,15 @@ use futures::future::Future;
 use byteorder::{ByteOrder};
 
 use reactor::*;
+use core::*;
 */
-
 pub mod reactor;
 pub mod fake_bd;
+pub mod core;
 
 
 fn main() {
 
-    
     
     return;
 }

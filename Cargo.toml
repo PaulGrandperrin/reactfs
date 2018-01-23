@@ -9,6 +9,7 @@ futures = "0.1"
 slab = "0.4"
 byteorder = "1"
 failure = "0.1"
+itertools = {version = "0.7", default-features = false}
 
 [dev-dependencies]
 quickcheck = { version = "0.6", features = ["unstable"]}
