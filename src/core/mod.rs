@@ -85,7 +85,7 @@ fn format(handle: Handle) -> Result<(), failure::Error> {
 }
 
 #[async]
-fn read_latest_uberblock(handle: Handle) -> Result<Uberblock, failure::Error> {
+fn find_latest_uberblock(handle: Handle) -> Result<Uberblock, failure::Error> {
     let uberblocks = await!(handle.read(0, BLOCK_SIZE as u64 *10))?;
     let uberblock = uberblocks.chunks(BLOCK_SIZE)
         .map(|chunk| {
@@ -103,4 +103,31 @@ fn read_latest_uberblock(handle: Handle) -> Result<Uberblock, failure::Error> {
         });
 
     uberblock
+}
+
+#[async]
+fn write_new_uberblock(handle: Handle, uberblock: Uberblock) -> Result<(), failure::Error> {
+    // first we find the oldest uberblock offset
+    let data = await!(handle.read(0, BLOCK_SIZE as u64 *10))?;
+    let (offset, _tgx) = data.chunks(BLOCK_SIZE).enumerate()
+        .map(|(i, chunk)| {
+            Uberblock::from_mem(chunk).map(|u|{
+                (i, u)
+            })
+        })
+        .fold_results(None::<(usize, u64)>, |acc, u| {
+            if let Some(acc) = acc {
+                if u.1.tgx <= acc.1 {
+                    return Some(acc)
+                }
+            }
+            Some((u.0, u.1.tgx))
+        }).map(|o| {
+            o.unwrap() // guaranted to succeed
+        })?;
+
+    // now write the new uberblock in place of the oldest
+    await!(handle.write(uberblock.to_mem().into_vec(), (offset*BLOCK_SIZE) as u64))?;
+
+    Ok(())
 }
