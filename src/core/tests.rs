@@ -3,6 +3,7 @@ use std::thread;
 use std::sync::mpsc::channel;
 use ::*;
 use super::*;
+use ::backend::unix_file::*;
 
 /* TODO
  - use in memory fake block device
@@ -16,7 +17,7 @@ fn format_and_read_uberblock() {
 
     let react_sender_bd = react_sender.clone();
     let _bd_thread = thread::spawn(move || {
-        fake_bd::fake_bd_loop(react_sender_bd, bd_receiver);
+        unix_file_backend_loop(react_sender_bd, bd_receiver);
     });
 
     let mut core = Core::new(bd_sender, fs_sender, react_receiver);

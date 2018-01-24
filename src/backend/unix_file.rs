@@ -13,7 +13,7 @@ use reactor::{Event};
  - use failure crate
 */
 
-/// This function implements a fake block device.
+/// This function implements a unix file backend.
 ///
 /// The function body is an infinite loop and therefor never returns.
 /// It should then be called from inside a thread.
@@ -21,7 +21,7 @@ use reactor::{Event};
 /// All data is written to the file `bd.raw`.
 ///
 /// All operations are recorded in the file `bd.log`. 
-pub fn fake_bd_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
+pub fn unix_file_backend_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
     
     let mut bd = OpenOptions::new()
         .read(true)
