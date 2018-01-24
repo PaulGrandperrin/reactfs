@@ -8,7 +8,6 @@ use super::*;
 use ::backend::mem::*;
 
 /* TODO
- - use in memory fake block device
  - factorize code
 */
 
