@@ -148,7 +148,7 @@ fn write_fibonacci_seq(h:Handle, n: u64) -> Result<(), failure::Error> {
         );
     await!(f)?;
 
-    for i in 2..n {
+    for i in 2..(n+1) {
         let f = Future::join(
             read_u64(&h, i-1),
             read_u64(&h, i-2)
