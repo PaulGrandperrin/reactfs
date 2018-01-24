@@ -29,7 +29,5 @@ pub mod core;
 
 
 fn main() {
-
-    
     return;
 }

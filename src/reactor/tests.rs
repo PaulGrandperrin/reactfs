@@ -5,7 +5,7 @@ use byteorder::{ByteOrder};
 use std::sync::mpsc::channel;
 use ::*;
 use super::*;
-use ::backend::unix_file::*;
+use ::backend::mem::*;
 
 /* TODO
  - use in memory fake block device
@@ -21,7 +21,7 @@ proptest! {
 
         let react_sender_bd = react_sender.clone();
         let _bd_thread = thread::spawn(move || {
-            unix_file_backend_loop(react_sender_bd, bd_receiver);
+            mem_backend_loop(react_sender_bd, bd_receiver, 4096 * 1000);
         });
 
         let mut core = Core::new(bd_sender, fs_sender, react_receiver);
@@ -48,7 +48,7 @@ proptest! {
 
         let react_sender_bd = react_sender.clone();
         let _bd_thread = thread::spawn(move || {
-            unix_file_backend_loop(react_sender_bd, bd_receiver);
+            mem_backend_loop(react_sender_bd, bd_receiver, 4096 * 1000);
         });
 
         let mut core = Core::new(bd_sender, fs_sender, react_receiver);
@@ -77,7 +77,7 @@ fn error_propagation() {
 
     let react_sender_bd = react_sender.clone();
     let _bd_thread = thread::spawn(move || {
-        unix_file_backend_loop(react_sender_bd, bd_receiver);
+        mem_backend_loop(react_sender_bd, bd_receiver, 4096 * 1000);
     });
 
     let mut core = Core::new(bd_sender, fs_sender, react_receiver);

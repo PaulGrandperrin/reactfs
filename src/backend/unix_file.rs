@@ -9,8 +9,6 @@ use reactor::{Event};
 /* TODO
  - enforce block semantics (4k)
  - use logger
- - forward errors
- - use failure crate
 */
 
 /// This function implements a unix file backend.
@@ -20,7 +18,7 @@ use reactor::{Event};
 ///
 /// All data is written to the file `bd.raw`.
 ///
-/// All operations are recorded in the file `bd.log`. 
+/// All operations are recorded in the file `bd.log`.
 pub fn unix_file_backend_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>) {
     
     let mut bd = OpenOptions::new()
