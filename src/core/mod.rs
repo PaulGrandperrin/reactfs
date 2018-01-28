@@ -147,7 +147,7 @@ impl Uberblock {
         return mem;
     }
 
-    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=(), Error=failure::Error> {
+    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
         handle.write(self.to_mem().to_vec(), offset)
     }
 }
@@ -190,8 +190,8 @@ impl LeafNode {
         }
     }
 
-    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=(), Error=failure::Error> {
-        handle.write(self.to_mem().to_vec(), offset)
+    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
+            handle.write(self.to_mem().to_vec(), offset)
     }
 
 }
@@ -235,7 +235,7 @@ impl InternalNode {
         }
     }
 
-    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=(), Error=failure::Error> {
+    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
         handle.write(self.to_mem().to_vec(), offset)
     }
 }

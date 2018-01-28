@@ -71,7 +71,7 @@ pub fn unix_file_backend_loop(sender: Sender<Event>, receiver: Receiver<BDReques
 
                 let result = match res {
                     Ok(()) => 
-                        Ok(FutureEvent::WriteResponse(WriteResponse{}))
+                        Ok(FutureEvent::WriteResponse(WriteResponse{len: w.data.len() as u64}))
                     ,
                     Err(e) => 
                         Err(e.into())

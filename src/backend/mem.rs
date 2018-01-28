@@ -55,7 +55,7 @@ pub fn mem_backend_loop(sender: Sender<Event>, receiver: Receiver<BDRequest>, si
                         ptr::copy_nonoverlapping(w.data.as_ptr(), mem[w.offset as usize..].as_mut_ptr(), w.data.len() as usize);
                     }
                     
-                    Ok(FutureEvent::WriteResponse(WriteResponse{}))
+                    Ok(FutureEvent::WriteResponse(WriteResponse{len: w.data.len() as u64}))
                 } else {
                     Err(format_err!("mem backend: write operation ouside of limit: {} + {} > {}", w.offset, w.data.len(), size))
                 };

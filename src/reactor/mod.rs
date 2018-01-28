@@ -150,6 +150,7 @@ pub struct ReadResponse {
 /// A block device write response
 #[derive(Debug)]
 pub struct WriteResponse {
+    pub len: u64
 }
 
 /// A block device flush response
@@ -563,7 +564,7 @@ pub struct FutureWrite {
 }
 
 impl Future for FutureWrite {
-    type Item=();
+    type Item=u64;
     type Error=failure::Error;
     
     fn poll(&mut self) -> futures::prelude::Poll<Self::Item, Self::Error> {
@@ -595,9 +596,9 @@ impl Future for FutureWrite {
                 FutureWriteState::Pending{event_id} => {
                     // if we have the result
                     match inner.events_to_future.remove(&event_id) {
-                        Some(Ok(FutureEvent::WriteResponse(WriteResponse{}))) => {
+                        Some(Ok(FutureEvent::WriteResponse(WriteResponse{len}))) => {
                             // update state and return status
-                            (FutureWriteState::Done, Ok(Async::Ready(())))
+                            (FutureWriteState::Done, Ok(Async::Ready(len)))
                         },
                         Some(Err(e)) => {
                             // update state and return status
