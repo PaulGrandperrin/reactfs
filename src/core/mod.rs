@@ -176,7 +176,9 @@ impl LeafNode {
     }
 
     fn to_mem(&self) -> Box<[u8]> {
-        let mut mem = Vec::with_capacity(self.entries.len()*(8*2));
+        let size = self.entries.len()*(8*2);
+        let mut mem = Vec::with_capacity(size);
+        unsafe{mem.set_len(size)};
         self.to_bytes(&mut Cursor::new(&mut mem));
         return mem.into_boxed_slice();
     }
@@ -242,8 +244,19 @@ impl InternalNode {
 
 #[async]
 fn format(handle: Handle) -> Result<(), failure::Error> {
-    let op = ObjectPointer::new(10 * BLOCK_SIZE as u64, 0, ObjectType::LeafNode);
+    let mut free_space_offset = 10 * BLOCK_SIZE as u64;
+    
+    // write tree
+    let mut tree = LeafNode::new();
+    tree.entries.push(LeafNodeEntry{key: 13, value: 14});
+    let tree_offset = free_space_offset;
+    let tree_len = await!(tree.async_write_at(handle.clone(), free_space_offset))?;
+    free_space_offset += tree_len;
 
+    // create pointer to tree
+    let op = ObjectPointer::new(tree_offset, tree_len, ObjectType::LeafNode);
+
+    // create all uberblocks
     let writes: Vec<_> = (0..10)
         .map(|i| {
             let s: Box<[u8]> = Uberblock::new(i, op.clone(), 10 * BLOCK_SIZE as u64).to_mem();
@@ -251,6 +264,7 @@ fn format(handle: Handle) -> Result<(), failure::Error> {
         })
         .collect();
 
+    // write all uberblocks
     await!(future::join_all(writes))?;
     Ok(())
 }
