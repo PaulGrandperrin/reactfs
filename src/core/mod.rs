@@ -152,6 +152,94 @@ impl Uberblock {
     }
 }
 
+impl LeafNode {
+    pub fn new() -> LeafNode {
+        LeafNode {
+            entries: vec![],
+        }
+    }
+
+    pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<LeafNode, failure::Error> {
+        let mut entries = vec![];
+
+        while bytes.remaining() >= 8 + 8 {
+            let key = bytes.get_u64::<LittleEndian>();
+            let value = bytes.get_u64::<LittleEndian>();
+            entries.push(LeafNodeEntry{key, value});
+        }
+
+        Ok(
+            LeafNode {
+                entries
+            }
+        )
+    }
+
+    fn to_mem(&self) -> Box<[u8]> {
+        let mut mem = Vec::with_capacity(self.entries.len()*(8*2));
+        self.to_bytes(&mut Cursor::new(&mut mem));
+        return mem.into_boxed_slice();
+    }
+
+    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
+        assert!(bytes.remaining_mut() >= self.entries.len() * (8 + 8));
+
+        for LeafNodeEntry{key, value} in &self.entries {
+            bytes.put_u64::<LittleEndian>(*key);
+            bytes.put_u64::<LittleEndian>(*value);
+        }
+    }
+
+    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=(), Error=failure::Error> {
+        handle.write(self.to_mem().to_vec(), offset)
+    }
+
+}
+
+impl InternalNode {
+
+    pub fn new() -> InternalNode {
+        InternalNode {
+            entries: vec![],
+        }
+    }
+
+    pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<InternalNode, failure::Error> {
+        let mut entries = vec![];
+
+        while bytes.remaining() >= 8 + (8 + 8 + 1) {
+            let key = bytes.get_u64::<LittleEndian>();
+            let object_pointer = ObjectPointer::from_bytes(bytes)?;
+            entries.push(InternalNodeEntry{key, object_pointer});
+        }
+
+        Ok(
+            InternalNode {
+                entries
+            }
+        )
+    }
+
+    fn to_mem(&self) -> Box<[u8]> {
+        let mut mem = Vec::with_capacity(self.entries.len()*(8 + (8 + 8 + 1)));
+        self.to_bytes(&mut Cursor::new(&mut mem));
+        return mem.into_boxed_slice();
+    }
+
+    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
+        assert!(bytes.remaining_mut() >= self.entries.len() * (8 + (8 + 8 + 1)));
+
+        for InternalNodeEntry{key, object_pointer} in &self.entries {
+            bytes.put_u64::<LittleEndian>(*key);
+            object_pointer.to_bytes(bytes);
+        }
+    }
+
+    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=(), Error=failure::Error> {
+        handle.write(self.to_mem().to_vec(), offset)
+    }
+}
+
 #[async]
 fn format(handle: Handle) -> Result<(), failure::Error> {
     let op = ObjectPointer::new(10 * BLOCK_SIZE as u64, 0, ObjectType::LeafNode);
