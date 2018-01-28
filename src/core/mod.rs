@@ -99,6 +99,47 @@ impl ObjectPointer {
         bytes.put_u64::<LittleEndian>(self.len);
         bytes.put_u8(self.object_type.to_u8().unwrap()); // there is less than 2^8 types
     }
+
+    fn async_read_object(&self, handle: Handle) -> impl Future<Item=AnyObject, Error=failure::Error> {
+        let object_type = self.object_type.clone();
+
+        handle.read(self.offset, self.len).and_then(move |mem|{
+            match object_type {
+                ObjectType::LeafNode => {
+                    Ok(AnyObject::LeafNode(Box::new(
+                        LeafNode::from_bytes(&mut Cursor::new(&mem))?
+                    )))
+                }
+                ObjectType::InternalNode => {
+                    Ok(AnyObject::InternalNode(Box::new(
+                        InternalNode::from_bytes(&mut Cursor::new(&mem))?
+                    )))
+                }
+                _ => unimplemented!()
+            }
+        })
+    }
+
+    /*
+    fn async_read_object<'f>(&'f self, handle: Handle) -> impl Future<Item=AnyObject, Error=failure::Error> + 'f {
+        async_block!{
+            let mem = await!(handle.read(self.offset, self.len))?;
+            match self.object_type {
+                ObjectType::LeafNode => {
+                    Ok(AnyObject::LeafNode(Box::new(
+                        LeafNode::from_bytes(&mut Cursor::new(&mem))?
+                    )))
+                }
+                ObjectType::InternalNode => {
+                    Ok(AnyObject::InternalNode(Box::new(
+                        InternalNode::from_bytes(&mut Cursor::new(&mem))?
+                    )))
+                }
+                _ => unimplemented!()
+            }
+        }
+    }
+    */
 }
 
 impl Uberblock {
