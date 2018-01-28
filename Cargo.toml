@@ -10,6 +10,9 @@ slab = "0.4"
 byteorder = "1"
 failure = "0.1"
 itertools = {version = "0.7", default-features = false}
+num-traits = "0.1"
+enum-primitive-derive = "0.1"
+bytes = "0.4"
 
 [dev-dependencies]
 quickcheck = { version = "0.6", features = ["unstable"]}
