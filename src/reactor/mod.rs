@@ -369,7 +369,7 @@ impl Core {
             inner.current_task_id = Some(TaskId(0));
         }
 
-        println!("reactor: polling future");
+        //println!("reactor: polling future");
         match future.poll() {
                 Ok(Async::Ready(r)) => return Ok(r),
                 Err(e) => return Err(e),
@@ -389,7 +389,7 @@ impl Core {
                 }
 
                 // read event from channel
-                println!("reactor: waiting on channel");
+                //println!("reactor: waiting on channel");
                 let event = self.receiver.recv().unwrap();    
                 //println!("reactor: received event {:?}", event);
 
@@ -419,7 +419,7 @@ impl Core {
             // if the task we're about to poll finishes, we'll remove it
             let mut task_finished = false;
 
-            println!("reactor: polling future");
+            //println!("reactor: polling future");
             match task_id_to_poll {
                 // main task
                 TaskId(0) => {
@@ -479,7 +479,7 @@ impl Future for FutureRead {
         let task_id = inner.current_task_id
             .expect("trying to poll a future when the reactor is not running");
 
-        println!("FutureRead is polled with task_id={:?}", task_id);
+        //println!("FutureRead is polled with task_id={:?}", task_id);
 
         match self.state {
             // first time the future is polled, push command to queue
@@ -575,7 +575,7 @@ impl Future for FutureWrite {
         let task_id = inner.current_task_id
             .expect("trying to poll a future when the reactor is not running");
 
-        println!("FutureWrite is polled with task_id={:?}", task_id);
+        //println!("FutureWrite is polled with task_id={:?}", task_id);
 
         self.state.replace(|state| {
             match state {
@@ -650,7 +650,7 @@ impl Future for FutureFlush {
         let task_id = inner.current_task_id
             .expect("trying to poll a future when the reactor is not running");
 
-        println!("FutureFlush is polled with task_id={:?}", task_id);
+        //println!("FutureFlush is polled with task_id={:?}", task_id);
 
         match self.state {
             // first time the future is polled, push command to queue
