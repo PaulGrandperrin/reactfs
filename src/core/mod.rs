@@ -25,8 +25,8 @@ enum ObjectType {
 
 #[derive(Debug)]
 enum AnyObject {
+    LeafNode(Box<LeafNode>),
     InternalNode(Box<InternalNode>),
-    LeafNode(Box<LeafNode>)
 }
 
 #[derive(Debug)]
@@ -153,7 +153,7 @@ impl Uberblock {
     }
 
     fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Uberblock, failure::Error> {
-        assert!(bytes.remaining() >= 8 + 8 + 8);
+        assert!(bytes.remaining() >= 8 + 8 + 8 + (8 + 8 + 1));
 
         let mut magic= [0;8];
         bytes.copy_to_slice(&mut magic);
@@ -163,6 +163,8 @@ impl Uberblock {
         let tgx = bytes.get_u64::<LittleEndian>();
         let free_space_offset = bytes.get_u64::<LittleEndian>();
         let tree_root_pointer = ObjectPointer::from_bytes(bytes)?;
+
+        assert!(bytes.remaining() == 0);
 
         Ok(
             Uberblock {
@@ -208,6 +210,8 @@ impl LeafNode {
             let value = bytes.get_u64::<LittleEndian>();
             entries.push(LeafNodeEntry{key, value});
         }
+
+        assert!(bytes.remaining() == 0);
 
         Ok(
             LeafNode {
@@ -256,6 +260,8 @@ impl InternalNode {
             entries.push(InternalNodeEntry{key, object_pointer});
         }
 
+        assert!(bytes.remaining() == 0);
+
         Ok(
             InternalNode {
                 entries
@@ -264,7 +270,9 @@ impl InternalNode {
     }
 
     fn to_mem(&self) -> Box<[u8]> {
-        let mut mem = Vec::with_capacity(self.entries.len()*(8 + (8 + 8 + 1)));
+        let size = self.entries.len()*(8 + (8 + 8 + 1));
+        let mut mem = Vec::with_capacity(size);
+        unsafe{mem.set_len(size)};
         self.to_bytes(&mut Cursor::new(&mut mem));
         return mem.into_boxed_slice();
     }
@@ -289,7 +297,6 @@ fn format(handle: Handle) -> Result<(), failure::Error> {
     
     // write tree
     let mut tree = LeafNode::new();
-    tree.entries.push(LeafNodeEntry{key: 13, value: 14});
     let tree_offset = free_space_offset;
     let tree_len = await!(tree.async_write_at(handle.clone(), free_space_offset))?;
     free_space_offset += tree_len;
@@ -300,7 +307,7 @@ fn format(handle: Handle) -> Result<(), failure::Error> {
     // create all uberblocks
     let writes: Vec<_> = (0..10)
         .map(|i| {
-            let s: Box<[u8]> = Uberblock::new(i, op.clone(), 10 * BLOCK_SIZE as u64).to_mem();
+            let s: Box<[u8]> = Uberblock::new(i, op.clone(), free_space_offset).to_mem();
             handle.write(s.into_vec(), i*BLOCK_SIZE as u64)
         })
         .collect();
@@ -315,7 +322,7 @@ fn find_latest_uberblock(handle: Handle) -> Result<Uberblock, failure::Error> {
     let uberblocks = await!(handle.read(0, BLOCK_SIZE as u64 *10))?;
     let uberblock = uberblocks.chunks(BLOCK_SIZE)
         .map(|chunk| {
-            Uberblock::from_bytes(&mut Cursor::new(chunk))
+            Uberblock::from_bytes(&mut Cursor::new(&chunk[0..(8 + 8 + 8 + (8 + 8 + 1))]))
         })
         .fold_results(None::<Uberblock>, |acc, u| { // compute max if no error
             if let Some(acc) = acc {
@@ -337,7 +344,7 @@ fn write_new_uberblock(handle: Handle, uberblock: Uberblock) -> Result<(), failu
     let data = await!(handle.read(0, BLOCK_SIZE as u64 *10))?;
     let (offset, _tgx) = data.chunks(BLOCK_SIZE).enumerate()
         .map(|(i, chunk)| {
-            Uberblock::from_bytes(&mut Cursor::new(chunk)).map(|u|{
+            Uberblock::from_bytes(&mut Cursor::new(&chunk[0..(8 + 8 + 8 + (8 + 8 + 1))])).map(|u|{
                 (i, u)
             })
         })
