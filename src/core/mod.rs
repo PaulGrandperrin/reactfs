@@ -14,6 +14,9 @@ use std::io::Cursor;
 #[cfg(test)]
 mod tests;
 
+#[cfg(fuzzing)]
+pub mod fuzzing;
+
 const MAGIC_NUMBER: &[u8] = b"ReactFS0";
 const BLOCK_SIZE: usize = 4096;
 
