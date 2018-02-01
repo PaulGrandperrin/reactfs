@@ -17,7 +17,7 @@ extern crate quickcheck;
 #[cfg(test)]
 #[macro_use]
 extern crate proptest;
-/*
+
 use std::thread;
 use std::sync::mpsc::channel;
 use futures::prelude::*;
@@ -26,13 +26,10 @@ use byteorder::{ByteOrder};
 
 use reactor::*;
 use core::*;
-use backend::unix_file::*;
-*/
+use backend::mem::*;
+
 
 pub mod reactor;
 pub mod backend;
 pub mod core;
 
-fn main() {
-    return;
-}
