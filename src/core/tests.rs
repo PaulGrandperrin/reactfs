@@ -84,7 +84,7 @@ fn format_read_and_write_uberblock_async(handle: Handle, n: usize) -> Result<Ube
 }
 
 #[async]
-pub fn cow_btree_increasing_async(handle: Handle, n: usize) -> Result<(), failure::Error> {
+fn cow_btree_increasing_async(handle: Handle, n: usize) -> Result<(), failure::Error> {
     await!(format(handle.clone()))?;
     let uberblock = await!(find_latest_uberblock(handle.clone()))?;
     let (mut op, mut free_space_offset) = (uberblock.tree_root_pointer, uberblock.free_space_offset);
@@ -110,7 +110,7 @@ pub fn cow_btree_increasing_async(handle: Handle, n: usize) -> Result<(), failur
 }
 
 #[async]
-pub fn cow_btree_random_async(handle: Handle) -> Result<(), failure::Error> {
+fn cow_btree_random_async(handle: Handle) -> Result<(), failure::Error> {
     await!(format(handle.clone()))?;
     let uberblock = await!(find_latest_uberblock(handle.clone()))?;
     let (mut op, mut free_space_offset) = (uberblock.tree_root_pointer, uberblock.free_space_offset);

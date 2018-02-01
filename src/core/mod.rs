@@ -196,13 +196,13 @@ impl Uberblock {
 }
 
 impl LeafNode {
-    pub fn new() -> LeafNode {
+    fn new() -> LeafNode {
         LeafNode {
             entries: vec![],
         }
     }
 
-    pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<LeafNode, failure::Error> {
+    fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<LeafNode, failure::Error> {
         let mut entries = vec![];
 
         while bytes.remaining() >= 8 + 8 {
@@ -245,13 +245,13 @@ impl LeafNode {
 
 impl InternalNode {
 
-    pub fn new() -> InternalNode {
+    fn new() -> InternalNode {
         InternalNode {
             entries: vec![],
         }
     }
 
-    pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<InternalNode, failure::Error> {
+    fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<InternalNode, failure::Error> {
         let mut entries = vec![];
 
         while bytes.remaining() >= 8 + (8 + 8 + 1) {
