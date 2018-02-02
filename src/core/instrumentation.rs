@@ -24,7 +24,7 @@ pub fn fuzz_btree(data: &[u8]) {
     }
 }
 
-fn raw_to_vec_of_tuple(data: &[u8]) -> Vec<(u64, u64)> {
+pub fn raw_to_vec_of_tuple(data: &[u8]) -> Vec<(u64, u64)> {
     let vec_len = data.len() / (8 + 8);
     let mut data = Cursor::new(data);
     let mut vec = Vec::with_capacity(vec_len);
@@ -36,7 +36,7 @@ fn raw_to_vec_of_tuple(data: &[u8]) -> Vec<(u64, u64)> {
     vec
 }
 
-fn run_in_reactor_on_mem_backend<'a, F, T, E>(closure: F) -> Result<T, E>
+pub fn run_in_reactor_on_mem_backend<'a, F, T, E>(closure: F) -> Result<T, E>
 where F: Fn(Handle) -> Box<Future<Item=T, Error=E> + 'a>
 {
     let (bd_sender, bd_receiver) = channel::<BDRequest>();

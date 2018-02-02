@@ -4,70 +4,31 @@ use std::sync::mpsc::channel;
 use ::*;
 use super::*;
 use ::backend::mem::*;
+use instrumentation::*;
 
 proptest! {
     #[test]
     fn format_read_and_write_uberblock(n in 0usize..20) {
-        let (bd_sender, bd_receiver) = channel::<BDRequest>();
-        let (fs_sender, _fs_receiver) = channel::<FSResponse>();
-        let (react_sender, react_receiver) = channel::<Event>();
+        let res = run_in_reactor_on_mem_backend(|handle| {
+            Box::new(format_read_and_write_uberblock_async(handle.clone(), n))
+        }).unwrap();
 
-        let react_sender_bd = react_sender.clone();
-        let _bd_thread = thread::spawn(move || {
-            mem_backend_loop(react_sender_bd, bd_receiver, 4096 * 1000);
-        });
-
-        let mut core = Core::new(bd_sender, fs_sender, react_receiver);
-        let handle = core.handle();
-
-        let f = format_read_and_write_uberblock_async(handle.clone(), n);
-
-        println!("starting reactor");
-        let r = core.run(f);
-        assert!(r.unwrap().tgx == 9 + n as u64);
+        assert!(res.tgx == 9 + n as u64);
     }
 
     #[test]
     fn cow_btree_increasing(n in 0usize..100) {
-        let (bd_sender, bd_receiver) = channel::<BDRequest>();
-        let (fs_sender, _fs_receiver) = channel::<FSResponse>();
-        let (react_sender, react_receiver) = channel::<Event>();
-
-        let react_sender_bd = react_sender.clone();
-        let _bd_thread = thread::spawn(move || {
-            mem_backend_loop(react_sender_bd, bd_receiver, 4096 * 1000);
-        });
-
-        let mut core = Core::new(bd_sender, fs_sender, react_receiver);
-        let handle = core.handle();
-
-        let f = cow_btree_increasing_async(handle.clone(), n);
-
-        println!("starting reactor");
-        let r = core.run(f);
-        r.unwrap();
+        run_in_reactor_on_mem_backend(|handle| {
+            Box::new(cow_btree_increasing_async(handle.clone(), n))
+        }).unwrap();
     }
 }
 
 #[test]
 fn cow_btree_random() {
-    let (bd_sender, bd_receiver) = channel::<BDRequest>();
-    let (fs_sender, _fs_receiver) = channel::<FSResponse>();
-    let (react_sender, react_receiver) = channel::<Event>();
-
-    let react_sender_bd = react_sender.clone();
-    let _bd_thread = thread::spawn(move || {
-        mem_backend_loop(react_sender_bd, bd_receiver, 4096 * 1000);
-    });
-
-    let mut core = Core::new(bd_sender, fs_sender, react_receiver);
-    let handle = core.handle();
-
-    let f = cow_btree_random_async(handle.clone());
-
-    println!("starting reactor");
-    let r = core.run(f);
-    r.unwrap();
+    run_in_reactor_on_mem_backend(|handle| {
+        Box::new(cow_btree_random_async(handle.clone()))
+    }).unwrap();
 }
 
 #[async]
