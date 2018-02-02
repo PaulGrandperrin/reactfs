@@ -11,11 +11,11 @@ use num_traits::{FromPrimitive, ToPrimitive};
 use bytes::{Buf, BufMut, LittleEndian};
 use std::io::Cursor;
 
+#[cfg(any(instrumentation, test, fuzzing))]
+pub mod instrumentation;
+
 #[cfg(test)]
 mod tests;
-
-#[cfg(fuzzing)]
-pub mod fuzzing;
 
 const MAGIC_NUMBER: &[u8] = b"ReactFS0";
 const BLOCK_SIZE: usize = 4096;

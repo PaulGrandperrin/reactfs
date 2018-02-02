@@ -1,0 +1,38 @@
+#![allow(dead_code, unused)]
+#![feature(proc_macro, conservative_impl_trait, generators,universal_impl_trait, generator_trait, nll, match_default_bindings)]
+#![cfg_attr(test, feature(plugin))]
+#![cfg_attr(test, plugin(quickcheck_macros))]
+
+extern crate futures_await as futures;
+extern crate byteorder;
+extern crate bytes;
+extern crate itertools;
+extern crate num_traits;
+#[macro_use]
+extern crate enum_primitive_derive;
+#[macro_use] extern crate failure;
+
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
+
+use std::thread;
+use std::sync::mpsc::channel;
+use futures::prelude::*;
+use futures::future::Future;
+use byteorder::{ByteOrder};
+
+use reactor::*;
+use core::*;
+use backend::mem::*;
+
+
+pub mod reactor;
+pub mod backend;
+pub mod core;
+
+fn main() {
+	core::instrumentation::fuzz_btree(b"");
+}
