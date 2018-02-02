@@ -3,6 +3,9 @@ name = "reactfs"
 version = "0.1.0"
 authors = ["Paul Grandperrin <paul.grandperrin@gmail.com>"]
 
+[features]
+instrumentation = []
+
 [dependencies]
 futures-await = "0.1"
 futures = "0.1"
