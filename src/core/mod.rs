@@ -11,7 +11,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 use bytes::{Buf, BufMut, LittleEndian};
 use std::io::Cursor;
 
-#[cfg(any(instrumentation, test, fuzzing))]
+//#[cfg(any(instrumentation, test, fuzzing))]
 pub mod instrumentation;
 
 #[cfg(test)]
