@@ -531,7 +531,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                         Ok(i) => { // exact match
                             i
                         }
-                        Err(0) => 0, // smallest key is inserted in first child
+                        Err(0) => unreachable!("new key cannot be smaller than first key of right split"),
                         Err(i) => { // match first bigger key
                             i - 1
                         }
