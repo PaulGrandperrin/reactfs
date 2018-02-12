@@ -5,32 +5,47 @@ use ::*;
 use super::*;
 use ::backend::mem::*;
 
-pub fn fuzz_btree(data: &[u8]) {
-    // we don't want to explode the search space
-    if data.len() > 50 * (8 + 8) {return}
-
-    let mut vec = raw_to_vec_of_tuple(data);
-    let res = run_in_reactor_on_mem_backend(|handle| {
+pub fn insert_checked(vec: Vec<(u64, u64)>) {
+    // insert the data in the cow btree
+    let cow_btree = run_in_reactor_on_mem_backend(|handle| {
         Box::new(async_btree_insert_and_read(handle.clone(), &vec))
     }).unwrap();
 
-    // now sort the vector by key
-    vec.sort_by_key(|e| {e.0});
+    // do the same operation in an std btree
+    use std::collections::BTreeMap;
+    let mut std_btree = BTreeMap::<u64, u64>::new();
+    for (k, v) in vec {
+        std_btree.entry(k).and_modify(|e| {*e = e.wrapping_add(v).wrapping_mul(2)}).or_insert(v);
+    }
 
-    // check the btree data against the input vector
-    for i in 0..vec.len() {
-        assert!(res[i].key == vec[i].0);
-        assert!(res[i].value == vec[i].1);
+    // check that both btrees are the same
+    for ((std_k, std_v), cow) in std_btree.into_iter().zip(cow_btree) {
+        //println!("key: {} == {}", std_k, cow.key);
+        //println!("val: {} == {}", std_v, cow.value);
+        assert!(std_k == cow.key);
+        assert!(std_v == cow.value);
     }
 }
 
-pub fn raw_to_vec_of_tuple(data: &[u8]) -> Vec<(u64, u64)> {
+pub fn raw_to_vec_of_tuple_u64(data: &[u8]) -> Vec<(u64, u64)> {
     let vec_len = data.len() / (8 + 8);
     let mut data = Cursor::new(data);
     let mut vec = Vec::with_capacity(vec_len);
 
     for _ in 0..vec_len {
         vec.push((data.get_u64::<LittleEndian>(), data.get_u64::<LittleEndian>()));
+    }
+
+    vec
+}
+
+pub fn raw_to_vec_of_tuple_u16(data: &[u8]) -> Vec<(u64, u64)> {
+    let vec_len = data.len() / (2 + 2);
+    let mut data = Cursor::new(data);
+    let mut vec = Vec::with_capacity(vec_len);
+
+    for _ in 0..vec_len {
+        vec.push((data.get_u16::<LittleEndian>() as u64, data.get_u16::<LittleEndian>() as u64));
     }
 
     vec

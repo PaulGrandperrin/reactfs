@@ -1,5 +1,5 @@
 #![allow(dead_code, unused)]
-#![feature(proc_macro, conservative_impl_trait, generators,universal_impl_trait, generator_trait, nll, match_default_bindings)]
+#![feature(entry_and_modify, proc_macro, conservative_impl_trait, generators,universal_impl_trait, generator_trait, nll, match_default_bindings)]
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
