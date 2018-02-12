@@ -17,6 +17,7 @@ itertools = {version = "0.7", default-features = false}
 num-traits = "0.1"
 enum-primitive-derive = "0.1"
 bytes = "0.4"
+honggfuzz = {path = "../honggfuzz-rs"}
 
 [dev-dependencies]
 quickcheck = { version = "0.6", features = ["unstable"]}
@@ -26,3 +27,7 @@ proptest = "0.4"
 [[bin]]
 name = "reactfs"
 required-features = ["instrumentation"]
+
+[[bin]]
+name = "hfuzz-btree"
+path = "hfuzz/btree.rs"
