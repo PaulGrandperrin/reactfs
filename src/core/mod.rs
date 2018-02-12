@@ -377,10 +377,14 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
         AnyObject::LeafNode(mut node) => {
             // algo invariant
             assert!(node.entries.len() <= 5); // b <= len <= 2b+1 with b=2 except root 
-
             if node.entries.len() < 5 { // if there is enough space to insert
-                node.entries.push(entry_to_insert);
-                node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                let res = node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
+                if let Ok(i) = res {
+                    node.entries[i].value = node.entries[i].value.wrapping_add(entry_to_insert.value).wrapping_mul(2); // non linear function
+                } else {
+                    node.entries.push(entry_to_insert);
+                    node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                }
 
                 // COW node
                 let offset = free_space_offset;
@@ -405,11 +409,21 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // insert entry in either node
                 if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
-                    left_node.entries.push(entry_to_insert);
-                    left_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                    let res = left_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
+                    if let Ok(i) = res {
+                        left_node.entries[i].value = left_node.entries[i].value.wrapping_add(entry_to_insert.value).wrapping_mul(2); // non linear function
+                    } else {
+                        left_node.entries.push(entry_to_insert);
+                        left_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                    }
                 } else {
-                    right_node.entries.push(entry_to_insert);
-                    right_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                    let res = right_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
+                    if let Ok(i) = res {
+                        right_node.entries[i].value = right_node.entries[i].value.wrapping_add(entry_to_insert.value).wrapping_mul(2); // non linear function
+                    } else {
+                        right_node.entries.push(entry_to_insert);
+                        right_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                    }
                 }
 
                 // COW left node
