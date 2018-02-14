@@ -244,6 +244,18 @@ impl LeafNode {
             handle.write(self.to_mem().to_vec(), offset)
     }
 
+    // --
+
+    fn insert(&mut self, entry: LeafNodeEntry) {
+        let res = self.entries.binary_search_by_key(&entry.key, |e| e.key);
+        if let Ok(i) = res {
+            self.entries[i].value = self.entries[i].value.wrapping_add(entry.value).wrapping_mul(2); // non linear function
+        } else {
+            self.entries.push(entry);
+            self.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+        }
+    }
+
 }
 
 impl InternalNode {
@@ -378,13 +390,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
             // algo invariant
             assert!(node.entries.len() <= 5); // b <= len <= 2b+1 with b=2 except root 
             if node.entries.len() < 5 { // if there is enough space to insert
-                let res = node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
-                if let Ok(i) = res {
-                    node.entries[i].value = node.entries[i].value.wrapping_add(entry_to_insert.value).wrapping_mul(2); // non linear function
-                } else {
-                    node.entries.push(entry_to_insert);
-                    node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
-                }
+                node.insert(entry_to_insert);
 
                 // COW node
                 let offset = free_space_offset;
@@ -409,21 +415,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // insert entry in either node
                 if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
-                    let res = left_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
-                    if let Ok(i) = res {
-                        left_node.entries[i].value = left_node.entries[i].value.wrapping_add(entry_to_insert.value).wrapping_mul(2); // non linear function
-                    } else {
-                        left_node.entries.push(entry_to_insert);
-                        left_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
-                    }
+                    left_node.insert(entry_to_insert);
                 } else {
-                    let res = right_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
-                    if let Ok(i) = res {
-                        right_node.entries[i].value = right_node.entries[i].value.wrapping_add(entry_to_insert.value).wrapping_mul(2); // non linear function
-                    } else {
-                        right_node.entries.push(entry_to_insert);
-                        right_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
-                    }
+                    right_node.insert(entry_to_insert);
                 }
 
                 // COW left node
