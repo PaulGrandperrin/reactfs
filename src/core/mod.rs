@@ -256,6 +256,19 @@ impl LeafNode {
         }
     }
 
+    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
+        async_block! {
+            let offset = *fso;
+            let len = await!(self.async_write_at(handle.clone(), offset))?;
+            *fso += len;
+            let op = ObjectPointer {
+                offset,
+                len,
+                object_type: ObjectType::LeafNode 
+            };
+            Ok(op)
+        }
+    }
 }
 
 impl InternalNode {
@@ -303,6 +316,22 @@ impl InternalNode {
 
     fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
         handle.write(self.to_mem().to_vec(), offset)
+    }
+
+    // --
+
+    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
+        async_block! {
+            let offset = *fso;
+            let len = await!(self.async_write_at(handle.clone(), offset))?;
+            *fso += len;
+            let op = ObjectPointer {
+                offset,
+                len,
+                object_type: ObjectType::InternalNode 
+            };
+            Ok(op)
+        }
     }
 }
 
@@ -393,14 +422,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 node.insert(entry_to_insert);
 
                 // COW node
-                let offset = free_space_offset;
-                let len = await!(node.async_write_at(handle.clone(), offset))?;
-                free_space_offset += len;
-                let op = ObjectPointer {
-                    offset,
-                    len,
-                    object_type: ObjectType::LeafNode 
-                };
+                let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // return
                 Ok((InternalNodeEntry{key: node.entries[0].key, object_pointer: op}, None, free_space_offset))
@@ -420,25 +442,12 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                     right_node.insert(entry_to_insert);
                 }
 
+
                 // COW left node
-                let offset = free_space_offset;
-                let len = await!(left_node.async_write_at(handle.clone(), offset))?;
-                free_space_offset += len;
-                let op = ObjectPointer {
-                    offset,
-                    len,
-                    object_type: ObjectType::LeafNode 
-                };
+                let op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // COW right node
-                let offset = free_space_offset;
-                let len = await!(right_node.async_write_at(handle.clone(), offset))?;
-                free_space_offset += len;
-                let new_op = ObjectPointer {
-                    offset,
-                    len,
-                    object_type: ObjectType::LeafNode 
-                };
+                let new_op = await!(right_node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // return
                 Ok((
@@ -483,14 +492,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 }
 
                 // COW node
-                let offset = free_space_offset;
-                let len = await!(node.async_write_at(handle.clone(), offset))?;
-                free_space_offset += len;
-                let op = ObjectPointer {
-                    offset,
-                    len,
-                    object_type: ObjectType::InternalNode
-                };
+                let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // return
                 Ok((InternalNodeEntry{key: node.entries[0].key, object_pointer: op}, None, free_space_offset))
@@ -564,24 +566,10 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 }
 
                 // COW left node
-                let offset = free_space_offset;
-                let len = await!(left_node.async_write_at(handle.clone(), offset))?;
-                free_space_offset += len;
-                let op = ObjectPointer {
-                    offset,
-                    len,
-                    object_type: ObjectType::InternalNode 
-                };
+                let op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // COW right node
-                let offset = free_space_offset;
-                let len = await!(right_node.async_write_at(handle.clone(), offset))?;
-                free_space_offset += len;
-                let new_op = ObjectPointer {
-                    offset,
-                    len,
-                    object_type: ObjectType::InternalNode 
-                };
+                let new_op = await!(right_node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // return
                 Ok((
