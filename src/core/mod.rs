@@ -442,7 +442,6 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                     right_node.insert(entry_to_insert);
                 }
 
-
                 // COW left node
                 let op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
 
@@ -594,14 +593,7 @@ fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64, en
         new_root.entries.push(new_entry);
         new_root.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
 
-        let offset = free_space_offset;
-        let len = await!(new_root.async_write_at(handle.clone(), offset))?;
-        free_space_offset += len;
-        let op_root = ObjectPointer {
-            offset,
-            len,
-            object_type: ObjectType::InternalNode 
-        };
+        let op_root = await!(new_root.cow(handle.clone(), &mut free_space_offset))?;
 
         // return
         Ok((op_root, free_space_offset))
