@@ -10,7 +10,7 @@ fn main() {
         	// we don't want to explode the search space
     		if data.len() > 100 * (8 + 8) {return}
 
-    		let mut vec = raw_to_vec_of_tuple_u64(data);
+    		let vec = raw_to_vec_of_tuple_u64(data);
 
             insert_checked(vec);
         });
