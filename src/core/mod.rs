@@ -19,6 +19,9 @@ mod tests;
 
 const MAGIC_NUMBER: &[u8] = b"ReactFS0";
 const BLOCK_SIZE: usize = 4096;
+const BTREE_B: usize = 2;
+const BTREE_DEGREE: usize = BTREE_B*2+1;
+const BTREE_SPLIT: usize = BTREE_B+1;
 
 #[derive(Debug, Clone, Primitive)]
 enum ObjectType {
@@ -417,8 +420,8 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
     match any_object {
         AnyObject::LeafNode(mut node) => {
             // algo invariant
-            assert!(node.entries.len() <= 5); // b <= len <= 2b+1 with b=2 except root 
-            if node.entries.len() < 5 { // if there is enough space to insert
+            assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root 
+            if node.entries.len() < BTREE_DEGREE { // if there is enough space to insert
                 node.insert(entry_to_insert);
 
                 // COW node
@@ -430,7 +433,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 // rename node to left_node ...
                 let mut left_node = node;
                 // ... and split off its right half to right_node
-                let right_entries = left_node.entries.split_off(3); // split at b+1
+                let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
                 let mut right_node = LeafNode {
                     entries: right_entries
                 };
@@ -459,9 +462,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
         }
         AnyObject::InternalNode(mut node) => {
             // algo invariant
-            assert!(node.entries.len() <= 5); // b <= len <= 2b+1 with b=2 except root
+            assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
 
-            if node.entries.len() < 5 { // no need to split
+            if node.entries.len() < BTREE_DEGREE { // no need to split
                 // invariant: the array is sorted
                 let res = node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
                 let index = match res {
@@ -499,7 +502,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 // rename node to left_node ...
                 let mut left_node = node;
                 // ... and split off its right half to right_node
-                let right_entries = left_node.entries.split_off(3); // split at b+1
+                let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
                 let mut right_node = InternalNode {
                     entries: right_entries
                 };
@@ -609,11 +612,11 @@ fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Result<
 
     match any_object {
         AnyObject::LeafNode(mut node) => {
-            assert!(node.entries.len() <= 5);
+            assert!(node.entries.len() <= BTREE_DEGREE);
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
         }
         AnyObject::InternalNode(node) => {
-            assert!(node.entries.len() <= 5);
+            assert!(node.entries.len() <= BTREE_DEGREE);
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
             for n in node.entries {
                 await!(print_btree(handle.clone(), n.object_pointer, indentation + 1))?;
@@ -635,11 +638,11 @@ fn read_tree(handle: Handle, op: ObjectPointer) -> Result<Vec<LeafNodeEntry>, fa
 
     match any_object {
         AnyObject::LeafNode(mut node) => {
-            assert!(node.entries.len() <= 5);
+            assert!(node.entries.len() <= BTREE_DEGREE);
             v.append(&mut node.entries);
         }
         AnyObject::InternalNode(node) => {
-            assert!(node.entries.len() <= 5);
+            assert!(node.entries.len() <= BTREE_DEGREE);
             for n in node.entries {
                 let mut res = await!(read_tree(handle.clone(), n.object_pointer))?;
                 v.append(&mut res);
