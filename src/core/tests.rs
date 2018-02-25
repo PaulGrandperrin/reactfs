@@ -1,9 +1,14 @@
 use futures::prelude::*;
 use std::thread;
 use std::sync::mpsc::channel;
-use ::*;
-use super::*;
+
 use ::backend::mem::*;
+
+use super::*;
+use super::util::*;
+use super::uberblock::*;
+use super::cow_btree::*;
+
 use instrumentation::*;
 
 proptest! {
@@ -61,7 +66,7 @@ fn cow_btree_increasing_async(handle: Handle, n: usize) -> Result<(), failure::E
         free_space_offset = res.1;
     }
 
-    let res = await!(read_tree(handle.clone(), op.clone()))?;
+    let res = await!(read_btree(handle.clone(), op.clone()))?;
     
     for i in res {
         assert!(i.key == i.value - 1000);
@@ -141,7 +146,7 @@ fn cow_btree_random_async(handle: Handle) -> Result<(), failure::Error> {
         free_space_offset = res.1;
     }
 
-    let res = await!(read_tree(handle.clone(), op.clone()))?;
+    let res = await!(read_btree(handle.clone(), op.clone()))?;
     
     for i in 0..1000 {
         assert!(res[i].key == res[i].value - 1000);

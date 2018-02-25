@@ -1,9 +1,14 @@
 use futures::prelude::*;
 use std::thread;
 use std::sync::mpsc::channel;
-use ::*;
-use super::*;
+
 use ::backend::mem::*;
+
+use super::*;
+use super::util::*;
+use super::uberblock::*;
+use super::cow_btree::*;
+
 
 pub fn insert_checked(vec: Vec<(u64, u64)>) {
     // insert the data in the cow btree
@@ -90,6 +95,6 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
         }
 
         // read the btree, the data should now be sorted
-        await!(read_tree(handle.clone(), op.clone()))
+        await!(read_btree(handle.clone(), op.clone()))
     }
 }
