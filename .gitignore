@@ -1,3 +1,5 @@
 
 /target/
+/hfuzz_target/
+/hfuzz_workspace/
 **/*.rs.bk
