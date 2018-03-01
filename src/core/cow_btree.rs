@@ -1,3 +1,4 @@
+use std::u64;
 use super::*;
 
 impl LeafNode {
@@ -138,7 +139,7 @@ impl InternalNode {
 }
 
 #[async(boxed)]
-fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, Option<InternalNodeEntry>, u64), failure::Error> {
+fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, Option<InternalNodeEntry>, u64), failure::Error> {
     // read pointed object
     let mut any_object = await!(op.async_read_object(handle.clone()))?;
 
@@ -153,7 +154,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // return
-                Ok((InternalNodeEntry{key: node.entries[0].key, object_pointer: op}, None, free_space_offset))
+                Ok((op, None, free_space_offset))
             } else { // split
                 // rename node to left_node ...
                 let mut left_node = node;
@@ -178,7 +179,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // return
                 Ok((
-                    InternalNodeEntry{key: left_node.entries[0].key, object_pointer: op},
+                    op,
                     Some(InternalNodeEntry{key: right_node.entries[0].key, object_pointer: new_op}),
                     free_space_offset
                 ))
@@ -206,11 +207,11 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 let op = node.entries[index].object_pointer.clone();
                 
                 // recursion in child
-                let (entry, maybe_new_entry, mut free_space_offset) = 
+                let (new_op, maybe_new_entry, mut free_space_offset) = 
                     await!(insert_in_btree_rec(handle.clone(), op, free_space_offset, entry_to_insert))?;
 
-                // update entry with COWed new child
-                node.entries[index] = entry;
+                // update new_op with COWed new child
+                node.entries[index].object_pointer = new_op;
 
                 // maybe add new entry from a potentially split child
                 if let Some(new_entry) = maybe_new_entry {
@@ -222,7 +223,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
 
                 // return
-                Ok((InternalNodeEntry{key: node.entries[0].key, object_pointer: op}, None, free_space_offset))
+                Ok((op, None, free_space_offset))
             } else { // node is full: split
                 // rename node to left_node ...
                 let mut left_node = node;
@@ -250,12 +251,12 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                     let op = left_node.entries[index].object_pointer.clone();
 
                     // recursion in child
-                    let (entry, maybe_new_entry, new_free_space_offset) = 
+                    let (new_op, maybe_new_entry, new_free_space_offset) = 
                         await!(insert_in_btree_rec(handle.clone(), op, free_space_offset, entry_to_insert))?;
                     free_space_offset = new_free_space_offset;
 
-                    // update entry with COWed new child
-                    left_node.entries[index] = entry;
+                    // update new_op with COWed new child
+                    left_node.entries[index].object_pointer = new_op;
 
                     // maybe add new entry from a potentially split child
                     if let Some(new_entry) = maybe_new_entry {
@@ -278,12 +279,12 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                     let op = right_node.entries[index].object_pointer.clone();
                     
                     // recursion in child
-                    let (entry, maybe_new_entry, new_free_space_offset) = 
+                    let (new_op, maybe_new_entry, new_free_space_offset) = 
                         await!(insert_in_btree_rec(handle.clone(), op, free_space_offset, entry_to_insert))?;
                     free_space_offset = new_free_space_offset;
 
-                    // update entry with COWed new child
-                    right_node.entries[index] = entry;
+                    // update new_op with COWed new child
+                    right_node.entries[index].object_pointer = new_op;
 
                     // maybe add new entry from a potentially split child
                     if let Some(new_entry) = maybe_new_entry {
@@ -300,7 +301,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // return
                 Ok((
-                    InternalNodeEntry{key: left_node.entries[0].key, object_pointer: op},
+                    op,
                     Some(InternalNodeEntry{key: right_node.entries[0].key, object_pointer: new_op}),
                     free_space_offset
                 ))
@@ -312,12 +313,12 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 #[async]
 pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64, entry: LeafNodeEntry) -> Result<(ObjectPointer, u64), failure::Error> {
     // use recursive function to insert
-    let (entry, maybe_new_entry, mut free_space_offset) = await!(insert_in_btree_rec(handle.clone(), op, free_space_offset, entry))?;
+    let (new_op, maybe_new_entry, mut free_space_offset) = await!(insert_in_btree_rec(handle.clone(), op, free_space_offset, entry))?;
     
     // we might get back two object pointers...
     if let Some(new_entry) = maybe_new_entry { // ... if so, create a new root pointing to both 
         let mut new_root = InternalNode::new();
-        new_root.entries.push(entry);
+        new_root.entries.push(InternalNodeEntry{key: u64::MIN, object_pointer: new_op});
         new_root.entries.push(new_entry);
         new_root.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
 
@@ -327,7 +328,7 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
         Ok((op_root, free_space_offset))
     }
     else {
-        Ok((entry.object_pointer, free_space_offset))
+        Ok((new_op, free_space_offset))
     }
 }
 
