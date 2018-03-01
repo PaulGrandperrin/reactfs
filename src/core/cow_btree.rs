@@ -347,7 +347,7 @@ fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, e
 }
 
 /// insert or go in entry then split 
-#[async(boxed)] // TODO maybe later remove boxed
+#[async(boxed)]
 fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64), failure::Error> {
     // algo invariant
     assert!(cur_node.entries.len() < BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root. we need one free slot to insert
@@ -371,7 +371,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
     let mut any_object = await!(op.async_read_object(handle.clone()))?;
 
     match any_object {
-        AnyObject::LeafNode(mut child_node) => {
+        AnyObject::LeafNode(child_node) => {
             if child_node.entries.len() < BTREE_DEGREE { // if there is enough space to insert
                 let (child_op, new_free_space_offset) = await!(insert_in_leaf_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
@@ -480,7 +480,7 @@ pub fn insert_in_btree_2(handle: Handle, op: ObjectPointer, free_space_offset: u
     let mut any_object = await!(op.async_read_object(handle.clone()))?;
 
     let (op, new_free_space_offset) = match any_object {
-        AnyObject::LeafNode(mut node) => {
+        AnyObject::LeafNode(node) => {
             if node.entries.len() >= BTREE_DEGREE { // if there is not enough space to insert
                 // rename node to left_node ...
                 let mut left_node = node;
@@ -567,7 +567,7 @@ pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Res
     let mut any_object = await!(op.async_read_object(handle.clone()))?;
 
     match any_object {
-        AnyObject::LeafNode(mut node) => {
+        AnyObject::LeafNode(node) => {
             assert!(node.entries.len() <= BTREE_DEGREE);
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
         }
