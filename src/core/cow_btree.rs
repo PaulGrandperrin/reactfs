@@ -334,7 +334,7 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
 }
 
 /// insert or go in entry then split 
-#[async(boxed)] // remove boxed
+#[async]
 fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64), failure::Error> {
     // algo invariant
     assert!(node.entries.len() < BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root. we need one free slot to insert
