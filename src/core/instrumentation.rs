@@ -84,7 +84,7 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
 
         // insert the vector in the btree
         for i in 0..vec.len() {
-            let res = await!(insert_in_btree(
+            let res = await!(insert_in_btree_2(
                 handle.clone(),
                 op.clone(),
                 free_space_offset,
@@ -92,6 +92,8 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
                 ))?;
             op = res.0;
             free_space_offset = res.1;
+
+            await!(print_btree(handle.clone(), op.clone(), 0))?;
         }
 
         // read the btree, the data should now be sorted
