@@ -358,7 +358,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
         Ok(i) => { // exact match
             i
         }
-        Err(0) => 0, // smallest key is inserted in first child
+        Err(0) => unreachable!("new key cannot be smaller than first key of right split"),
         Err(i) => { // match first bigger key
             i - 1
         }
