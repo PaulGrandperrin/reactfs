@@ -30,6 +30,7 @@ pub fn insert_checked(vec: Vec<(u64, u64)>) {
         assert!(std_k == cow.key);
         assert!(std_v == cow.value);
     }
+
 }
 
 pub fn raw_to_vec_of_tuple_u64(data: &[u8]) -> Vec<(u64, u64)> {
@@ -92,8 +93,6 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
                 ))?;
             op = res.0;
             free_space_offset = res.1;
-
-            await!(print_btree(handle.clone(), op.clone(), 0))?;
         }
 
         // read the btree, the data should now be sorted
