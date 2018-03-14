@@ -540,6 +540,38 @@ pub fn insert_in_btree_2(handle: Handle, op: ObjectPointer, free_space_offset: u
     Ok((op, new_free_space_offset))
 }
 
+#[async]
+pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, failure::Error> {
+    // read pointed object
+    let mut any_object = await!(op.async_read_object(handle.clone()))?;
+
+    match any_object {
+        AnyObject::LeafNode(node) => {
+            // invariant: the array is sorted
+            let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
+            if let Ok(i) = res {
+                return Ok(Some(node.entries[i].value));
+            } else {
+                return Ok(None);
+            }
+        }
+        AnyObject::InternalNode(mut node) => {
+            // invariant: the array is sorted
+            let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
+            match res {
+                Ok(i) => { // exact match
+                    return await!(get(handle.clone(), node.entries[i].object_pointer.clone(), key));
+                }
+                Err(0) => unreachable!("new key cannot be smaller than first key of right split"),
+                Err(i) => { // match first bigger key
+                    return await!(get(handle.clone(), node.entries[i-1].object_pointer.clone(), key));
+                }
+            }
+        }
+    }
+}
+
+
 #[async(boxed)]
 pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Result<(), failure::Error> {
     let mut any_object = await!(op.async_read_object(handle.clone()))?;
