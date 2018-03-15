@@ -156,7 +156,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // return
                 Ok((op, None, free_space_offset))
-            } else { // split
+            } else { // pro-active splitting if the node has the maximum size
                 // rename node to left_node ...
                 let mut left_node = node;
                 // ... and split off its right half to right_node
@@ -225,7 +225,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // return
                 Ok((op, None, free_space_offset))
-            } else { // node is full: split
+            } else { // pro-active splitting if the node has the maximum size
                 // rename node to left_node ...
                 let mut left_node = node;
                 // ... and split off its right half to right_node
@@ -372,7 +372,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
 
     match any_object {
         AnyObject::LeafNode(child_node) => {
-            if child_node.entries.len() < BTREE_DEGREE { // if there is enough space to insert
+            if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 let (child_op, new_free_space_offset) = await!(insert_in_leaf_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
@@ -401,7 +401,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             ))
         }
         AnyObject::InternalNode(mut child_node) => {
-            if child_node.entries.len() < BTREE_DEGREE { // if there is enough space to insert
+            if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 let (child_op, new_free_space_offset) = await!(insert_in_internal_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
@@ -499,7 +499,7 @@ pub fn insert_in_btree_2(handle: Handle, op: ObjectPointer, free_space_offset: u
 
     let (op, new_free_space_offset) = match any_object {
         AnyObject::LeafNode(node) => {
-            if node.entries.len() >= BTREE_DEGREE { // if there is not enough space to insert
+            if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
                 let (left_op, right_op, new_free_space_offset, median) = await!(leaf_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
@@ -518,7 +518,7 @@ pub fn insert_in_btree_2(handle: Handle, op: ObjectPointer, free_space_offset: u
             }
         }
         AnyObject::InternalNode(mut node) => {
-            if node.entries.len() >= BTREE_DEGREE { // if there is not enough space to insert
+            if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
                 let (left_op, right_op, new_free_space_offset, median) = await!(internal_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
@@ -542,7 +542,7 @@ pub fn insert_in_btree_2(handle: Handle, op: ObjectPointer, free_space_offset: u
 
 #[async]
 pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, failure::Error> {
-    // read pointed object
+    // read root node
     let mut any_object = await!(op.async_read_object(handle.clone()))?;
 
     match any_object {
