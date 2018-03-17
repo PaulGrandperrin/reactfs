@@ -1,6 +1,22 @@
 use std::u64;
 use super::*;
 
+// TODO: move to some utility module
+#[inline]
+fn is_sorted<I: Iterator<Item=T>, T: Ord>(mut it: I) -> bool {
+    let last: T = match it.next() {
+        Some(i) => i,
+        None => return true
+    };
+
+    for i in it {
+        if i <= last {
+            return false;
+        }
+    }
+    true
+}
+
 impl LeafNode {
     pub fn new() -> LeafNode {
         LeafNode {
@@ -50,6 +66,9 @@ impl LeafNode {
     // --
 
     fn insert(&mut self, entry: LeafNodeEntry) {
+        // algo invariant: the entries should be sorted
+        debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
+
         let res = self.entries.binary_search_by_key(&entry.key, |e| e.key);
         if let Ok(i) = res {
             self.entries[i].value = self.entries[i].value.wrapping_add(entry.value).wrapping_mul(2); // non linear function
@@ -192,7 +211,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
             assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
 
             if node.entries.len() < BTREE_DEGREE { // no need to split
-                // invariant: the array is sorted
+                // algo invariant: the entries should be sorted
+                debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
+
                 let res = node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
                 let index = match res {
                     Ok(i) => { // exact match
@@ -236,7 +257,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // find in which branch to follow
                 if entry_to_insert.key < right_node.entries[0].key {
-                    // invariant: the array is sorted
+                    // algo invariant: the entries should be sorted
+                    debug_assert!(is_sorted(left_node.entries.iter().map(|l|{l.key})));
+
                     let res = left_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
                     let index = match res {
                         Ok(i) => { // exact match
@@ -265,6 +288,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                         left_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
                     }
                 } else {
+                    // algo invariant: the entries should be sorted
+                    debug_assert!(is_sorted(right_node.entries.iter().map(|l|{l.key})));
+
                     let res = right_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
                     let index = match res {
                         Ok(i) => { // exact match
@@ -352,7 +378,9 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
     // algo invariant
     assert!(cur_node.entries.len() < BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root. we need one free slot to insert
 
-    // invariant: the array is sorted
+    // algo invariant: the entries should be sorted
+    debug_assert!(is_sorted(cur_node.entries.iter().map(|l|{l.key})));
+
     let res = cur_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
     let index = match res {
         Ok(i) => { // exact match
@@ -547,7 +575,9 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
 
     match any_object {
         AnyObject::LeafNode(node) => {
-            // invariant: the array is sorted
+            // algo invariant: the entries should be sorted
+            debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
+
             let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
             if let Ok(i) = res {
                 return Ok(Some(node.entries[i].value));
@@ -556,7 +586,9 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
             }
         }
         AnyObject::InternalNode(node) => {
-            // invariant: the array is sorted
+            // algo invariant: the entries should be sorted
+            debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
+
             let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
             match res {
                 Ok(i) => { // exact match
