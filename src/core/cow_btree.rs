@@ -1,4 +1,4 @@
-use std::u64;
+use std::{u64, usize};
 use super::*;
 
 // TODO: move to some utility module
@@ -618,6 +618,328 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
     }
 }
 
+#[async]
+fn remove_in_leaf(handle: Handle, node: LeafNode, free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+    // algo invariant: the entries should be sorted
+    debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
+
+    let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
+
+    let removed = if let Ok(i) = res {
+        Some(node.entries.remove(i).value)
+    } else {
+        None
+    };
+    
+    // COW node
+    let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
+
+    Ok((op, free_space_offset, removed))
+}
+
+#[async]
+fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+    // algo invariant: the entries should be sorted
+    debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
+
+    let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
+    let index = match res {
+        Ok(i) => { // exact match
+            i
+        }
+        Err(0) => 0, // smallest key is inserted in first child
+        Err(i) => { // match first bigger key
+            i - 1
+        }
+    };
+
+    // read the child on the way to the key to delete
+    let child = await!(node.entries[index].object_pointer.async_read_object(handle.clone()))?;
+
+    match child {
+        AnyObject::LeafNode(mut child) => {
+            if child.entries.len() <= BTREE_B { // pro-active merging if the node has the minimum size
+                // find least filled neighbor
+
+                let mut least_filled_neighbor = None::<(LeafNode, isize)>; // tuple containing the least filled neighbor and it's relative index
+                let mut least_filled_neighbor_value = usize::MAX; // maximum value
+
+                if index > 0 { // if we have a left neighbor
+                    let neighbor = await!(node.entries[index - 1].object_pointer.async_read_object(handle.clone()))?;
+                    match neighbor { // TODO: use trait
+                        AnyObject::LeafNode(n) => {
+                            if n.entries.len() < least_filled_neighbor_value {
+                                least_filled_neighbor_value = n.entries.len();
+                                least_filled_neighbor = Some((*n, -1));
+                            }
+                        },
+                        AnyObject::InternalNode(n) => unreachable!("cow_btree: all sibling should be of the same kind")
+                    };
+                }
+
+                if index < (child.entries.len() - 1) { // if we have a right neighbor
+                    let neighbor = await!(node.entries[index + 1].object_pointer.async_read_object(handle.clone()))?;
+                    match neighbor { // TODO: use trait
+                        AnyObject::LeafNode(n) => {
+                            if n.entries.len() < least_filled_neighbor_value {
+                                least_filled_neighbor_value = n.entries.len();
+                                least_filled_neighbor = Some((*n, 1));
+                            }
+                        },
+                        AnyObject::InternalNode(n) => unreachable!("cow_btree: all sibling should be of the same kind")
+                    };
+                }
+
+                /* Ideas of a potentially better merge strategies:
+                A:
+                - if we can do a full merge with either neighbor, do it with the most filled one
+                - if we can do a full merge with only one neighbor, do it with this one
+                - if we can not do a full merge, do a partial merge with the most filled neighbor
+
+                B:
+                - Maybe try to less aggressively do a full merge
+                - Instead do as often as possible partial merges which distributes evenly the entries
+
+                C:
+                - Also, maybe, we should only read one of the neighbors, no need to read the two.
+                - and if so, do we choose at random or set a preference?
+                */
+
+                if let Some((mut neighbor, neighbor_relative_index)) = least_filled_neighbor { // if we had any neighbor
+                    // TODO: check that the following behavior is sensible performance-wise when BTREE_DEGREE > 2B + 1
+                    let removed_value = if child.entries.len() + neighbor.entries.len() <= BTREE_DEGREE { // if there is enough space, do a full merge
+                        // figure out the direction of which node will be merge into which
+                        let (mut src_node, src_index, mut dst_node, dst_index) = match neighbor_relative_index {
+                            -1 => (*child, index, neighbor, index - 1), // we are merging with left neighbor
+                             1 => (neighbor, index + 1, *child, index), // we are merging with right neighbor
+                             _ => unreachable!("cow_btree: invalid relative index")
+                        };
+
+                        // we drain the source node into the destination node
+                        for i in src_node.entries.drain(..) { // TODO: maybe there is a better way to do that, in one function call
+                            dst_node.entries.push(i);
+                        }
+                        // the entries should still be sorted
+                        debug_assert!(is_sorted(dst_node.entries.iter().map(|l|{l.key})));
+
+                        // recursion
+                        let (op, new_free_space_offset, removed_value) = await!(remove_in_leaf(handle.clone(), dst_node, free_space_offset, key))?;
+                        free_space_offset = new_free_space_offset;
+
+                        // update child entry to point to the new node
+                        node.entries[dst_index].object_pointer = op;
+
+                        // TODO: try to swap the above and below lines and see if the fuzzer catches the bug
+
+                        // remove the source node as it is empty now
+                        node.entries.remove(src_index); // all entries to the right are shifted left
+
+                        removed_value
+                    } else { // not enough place to fully merge, only move some entries to get a better balance
+                        // figure out how many entries we want to move
+                        let nb_entries = neighbor.entries.len();
+                        let nb_entries_to_move = nb_entries / 2; // TODO: maybe there is a better value
+
+                        let range_to_move = match neighbor_relative_index {
+                            -1 => nb_entries_to_move..nb_entries, // we are merging with left neighbor
+                             1 => 0..nb_entries_to_move, // we are merging with right neighbor
+                             _ => unreachable!("cow_btree: invalid relative index")
+                        };
+
+                        // move the entries
+                        for i in neighbor.entries.drain(range_to_move) { // TODO: maybe there is a better way to do that, in one function call
+                            child.entries.push(i);
+                        }
+                        // the entries should still be sorted
+                        debug_assert!(is_sorted(child.entries.iter().map(|l|{l.key})));
+
+                        // recursion
+                        let (child_op, new_free_space_offset, removed_value) = await!(remove_in_leaf(handle.clone(), *child, free_space_offset, key))?;
+                        free_space_offset = new_free_space_offset;
+
+                        // update child entry to point to the new node
+                        node.entries[index].object_pointer = child_op;
+
+                        // COW the neighbor
+                        let neighbor_op = await!(neighbor.cow(handle.clone(), &mut free_space_offset))?;
+                        node.entries[(index as isize + neighbor_relative_index) as usize].object_pointer = neighbor_op;
+
+                        removed_value
+                    };
+                    // COW the node
+                    let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
+                    return Ok((op, free_space_offset, removed_value));
+                } else {
+                    // we should be the root
+                    unreachable!("cow_btree: CHECK THAT WE ARE THE ROOT")
+                }
+            } else { // there is enough entries in the node: no need to merge
+                // TODO: find a way to factorize this code with the merge code
+                // recursion
+                let (op, new_free_space_offset, removed_value) = await!(remove_in_leaf(handle.clone(), *child, free_space_offset, key))?;
+                free_space_offset = new_free_space_offset;
+
+                // update child entry to point to the new node
+                node.entries[index].object_pointer = op;
+
+                // COW the node
+                let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
+                return Ok((op, free_space_offset, removed_value));
+            }
+        }
+        AnyObject::InternalNode(mut child) => {
+            if child.entries.len() <= BTREE_B { // pro-active merging if the node has the minimum size
+                // find least filled neighbor
+
+                let mut least_filled_neighbor = None::<(InternalNode, isize)>; // tuple containing the least filled neighbor and it's relative index
+                let mut least_filled_neighbor_value = usize::MAX; // maximum value
+
+                if index > 0 { // if we have a left neighbor
+                    let neighbor = await!(node.entries[index - 1].object_pointer.async_read_object(handle.clone()))?;
+                    match neighbor { // TODO: use trait
+                        AnyObject::InternalNode(n) => {
+                            if n.entries.len() < least_filled_neighbor_value {
+                                least_filled_neighbor_value = n.entries.len();
+                                least_filled_neighbor = Some((*n, -1));
+                            }
+                        },
+                        AnyObject::LeafNode(n) => unreachable!("cow_btree: all sibling should be of the same kind")
+                    };
+                }
+
+                if index < (child.entries.len() - 1) { // if we have a right neighbor
+                    let neighbor = await!(node.entries[index + 1].object_pointer.async_read_object(handle.clone()))?;
+                    match neighbor { // TODO: use trait
+                        AnyObject::InternalNode(n) => {
+                            if n.entries.len() < least_filled_neighbor_value {
+                                least_filled_neighbor_value = n.entries.len();
+                                least_filled_neighbor = Some((*n, 1));
+                            }
+                        },
+                        AnyObject::LeafNode(n) => unreachable!("cow_btree: all sibling should be of the same kind")
+                    };
+                }
+
+                /* Ideas of a potentially better merge strategies:
+                A:
+                - if we can do a full merge with either neighbor, do it with the most filled one
+                - if we can do a full merge with only one neighbor, do it with this one
+                - if we can not do a full merge, do a partial merge with the most filled neighbor
+
+                B:
+                - Maybe try to less aggressively do a full merge
+                - Instead do as often as possible partial merges which distributes evenly the entries
+
+                C:
+                - Also, maybe, we should only read one of the neighbors, no need to read the two.
+                - and if so, do we choose at random or set a preference?
+                */
+
+                if let Some((mut neighbor, neighbor_relative_index)) = least_filled_neighbor { // if we had any neighbor
+                    // TODO: check that the following behavior is sensible performance-wise when BTREE_DEGREE > 2B + 1
+                    let removed_value = if child.entries.len() + neighbor.entries.len() <= BTREE_DEGREE { // if there is enough space, do a full merge
+                        // figure out the direction of which node will be merge into which
+                        let (mut src_node, src_index, mut dst_node, dst_index) = match neighbor_relative_index {
+                            -1 => (*child, index, neighbor, index - 1), // we are merging with left neighbor
+                             1 => (neighbor, index + 1, *child, index), // we are merging with right neighbor
+                             _ => unreachable!("cow_btree: invalid relative index")
+                        };
+
+                        // we drain the source node into the destination node
+                        for i in src_node.entries.drain(..) { // TODO: maybe there is a better way to do that, in one function call
+                            dst_node.entries.push(i);
+                        }
+                        // the entries should still be sorted
+                        debug_assert!(is_sorted(dst_node.entries.iter().map(|l|{l.key})));
+
+                        // recursion
+                        let (op, new_free_space_offset, removed_value) = await!(remove_in_internal(handle.clone(), dst_node, free_space_offset, key))?;
+                        free_space_offset = new_free_space_offset;
+
+                        // update child entry to point to the new node
+                        node.entries[dst_index].object_pointer = op;
+
+                        // TODO: try to swap the above and below lines and see if the fuzzer catches the bug
+
+                        // remove the source node as it is empty now
+                        node.entries.remove(src_index); // all entries to the right are shifted left
+
+                        removed_value
+                    } else { // not enough place to fully merge, only move some entries to get a better balance
+                        // figure out how many entries we want to move
+                        let nb_entries = neighbor.entries.len();
+                        let nb_entries_to_move = nb_entries / 2; // TODO: maybe there is a better value
+
+                        let range_to_move = match neighbor_relative_index {
+                            -1 => nb_entries_to_move..nb_entries, // we are merging with left neighbor
+                             1 => 0..nb_entries_to_move, // we are merging with right neighbor
+                             _ => unreachable!("cow_btree: invalid relative index")
+                        };
+
+                        // move the entries
+                        for i in neighbor.entries.drain(range_to_move) { // TODO: maybe there is a better way to do that, in one function call
+                            child.entries.push(i);
+                        }
+                        // the entries should still be sorted
+                        debug_assert!(is_sorted(child.entries.iter().map(|l|{l.key})));
+
+                        // recursion
+                        let (child_op, new_free_space_offset, removed_value) = await!(remove_in_internal(handle.clone(), *child, free_space_offset, key))?;
+                        free_space_offset = new_free_space_offset;
+
+                        // update child entry to point to the new node
+                        node.entries[index].object_pointer = child_op;
+
+                        // COW the neighbor
+                        let neighbor_op = await!(neighbor.cow(handle.clone(), &mut free_space_offset))?;
+                        node.entries[(index as isize + neighbor_relative_index) as usize].object_pointer = neighbor_op;
+
+                        removed_value
+                    };
+                    // COW the node
+                    let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
+                    return Ok((op, free_space_offset, removed_value));
+                } else {
+                    // we should be the root
+                    unreachable!("cow_btree: CHECK THAT WE ARE THE ROOT")
+                }
+            } else { // there is enough entries in the node: no need to merge
+                // TODO: find a way to factorize this code with the merge code
+                // recursion
+                let (op, new_free_space_offset, removed_value) = await!(remove_in_internal(handle.clone(), *child, free_space_offset, key))?;
+                free_space_offset = new_free_space_offset;
+
+                // update child entry to point to the new node
+                node.entries[index].object_pointer = op;
+
+                // COW the node
+                let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
+                return Ok((op, free_space_offset, removed_value));
+            }
+        }
+    }
+
+    unreachable!()
+}
+
+
+// TODO: write a version that does not do any modifications if the entry to remove doesn't exist
+#[async]
+pub fn remove(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+    // read pointed object
+    let any_object = await!(op.async_read_object(handle.clone()))?;
+
+    let (op, new_free_space_offset, removed_value) = match any_object {
+        AnyObject::LeafNode(node) => {
+            await!(remove_in_leaf(handle.clone(), *node, free_space_offset, key))?
+        }
+        AnyObject::InternalNode(node) => {
+            unimplemented!()
+            //await!(insert_in_internal_node(handle, *node, free_space_offset, entry_to_insert))?
+        }
+    };
+    Ok((op, new_free_space_offset, removed_value))
+}
 
 #[async(boxed)]
 pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Result<(), failure::Error> {
