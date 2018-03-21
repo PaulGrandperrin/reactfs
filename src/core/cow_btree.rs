@@ -166,7 +166,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
     match any_object {
         AnyObject::LeafNode(mut node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root 
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
             if node.entries.len() < BTREE_DEGREE { // if there is enough space to insert
                 node.insert(entry_to_insert);
 
@@ -362,8 +362,9 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
 /// insert or go in entry then split 
 #[async]
 fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64), failure::Error> {
-    // algo invariant
-    debug_assert!(node.entries.len() < BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root. we need one free slot to insert
+    // algo invariant: the entries should be sorted
+    debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
+
     node.insert(entry_to_insert);
 
     // COW node
@@ -375,9 +376,6 @@ fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, e
 /// insert or go in entry then split 
 #[async(boxed)]
 fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64), failure::Error> {
-    // algo invariant
-    debug_assert!(cur_node.entries.len() < BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root. we need one free slot to insert
-
     // algo invariant: the entries should be sorted
     debug_assert!(is_sorted(cur_node.entries.iter().map(|l|{l.key})));
 
@@ -400,6 +398,8 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
 
     match any_object {
         AnyObject::LeafNode(child_node) => {
+            // algo invariant
+            debug_assert!(child_node.entries.len() >= BTREE_B && child_node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
             if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 let (child_op, new_free_space_offset) = await!(insert_in_leaf_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
@@ -429,6 +429,9 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             ))
         }
         AnyObject::InternalNode(child_node) => {
+            // algo invariant
+            debug_assert!(child_node.entries.len() >= BTREE_B && child_node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 let (child_op, new_free_space_offset) = await!(insert_in_internal_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
@@ -527,6 +530,9 @@ pub fn insert_in_btree_2(handle: Handle, op: ObjectPointer, free_space_offset: u
 
     let (op, new_free_space_offset) = match any_object {
         AnyObject::LeafNode(node) => {
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
                 let (left_op, right_op, new_free_space_offset, median) = await!(leaf_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
@@ -546,6 +552,9 @@ pub fn insert_in_btree_2(handle: Handle, op: ObjectPointer, free_space_offset: u
             }
         }
         AnyObject::InternalNode(node) => {
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
                 let (left_op, right_op, new_free_space_offset, median) = await!(internal_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
@@ -575,6 +584,9 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
 
     match any_object {
         AnyObject::LeafNode(node) => {
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             // algo invariant: the entries should be sorted
             debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
 
@@ -586,6 +598,9 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
             }
         }
         AnyObject::InternalNode(node) => {
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             // algo invariant: the entries should be sorted
             debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
 
@@ -610,11 +625,15 @@ pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Res
 
     match any_object {
         AnyObject::LeafNode(node) => {
-            debug_assert!(node.entries.len() <= BTREE_DEGREE);
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
         }
         AnyObject::InternalNode(node) => {
-            debug_assert!(node.entries.len() <= BTREE_DEGREE);
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
             for n in node.entries {
                 await!(print_btree(handle.clone(), n.object_pointer, indentation + 1))?;
@@ -636,11 +655,15 @@ pub fn read_btree(handle: Handle, op: ObjectPointer) -> Result<Vec<LeafNodeEntry
 
     match any_object {
         AnyObject::LeafNode(mut node) => {
-            debug_assert!(node.entries.len() <= BTREE_DEGREE);
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             v.append(&mut node.entries);
         }
         AnyObject::InternalNode(node) => {
-            debug_assert!(node.entries.len() <= BTREE_DEGREE);
+            // algo invariant
+            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+
             for n in node.entries {
                 let mut res = await!(read_btree(handle.clone(), n.object_pointer))?;
                 v.append(&mut res);
