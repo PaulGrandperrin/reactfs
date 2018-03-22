@@ -220,7 +220,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                     Ok(i) => { // exact match
                         i
                     }
-                    Err(0) => 0, // smallest key is inserted in first child
+                    Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
                     Err(i) => { // match first bigger key
                         i - 1
                     }
@@ -266,7 +266,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
                         Ok(i) => { // exact match
                             i
                         }
-                        Err(0) => 0, // smallest key is inserted in first child
+                        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
                         Err(i) => { // match first bigger key
                             i - 1
                         }
@@ -385,7 +385,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
         Ok(i) => { // exact match
             i
         }
-        Err(0) => unreachable!("new key cannot be smaller than first key of right split"),
+        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
         Err(i) => { // match first bigger key
             i - 1
         }
@@ -610,7 +610,7 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
                 Ok(i) => { // exact match
                     return await!(get(handle.clone(), node.entries[i].object_pointer.clone(), key));
                 }
-                Err(0) => unreachable!("new key cannot be smaller than first key of right split"),
+                Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
                 Err(i) => { // match first bigger key
                     return await!(get(handle.clone(), node.entries[i-1].object_pointer.clone(), key));
                 }
@@ -664,7 +664,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
         Ok(i) => { // exact match
             i
         }
-        Err(0) => 0, // smallest key is inserted in first child
+        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
         Err(i) => { // match first bigger key
             i - 1
         }
