@@ -1,3 +1,4 @@
+use std::u8;
 use futures::prelude::*;
 use std::thread;
 use std::sync::mpsc::channel;
@@ -9,6 +10,10 @@ use super::util::*;
 use super::uberblock::*;
 use super::cow_btree::*;
 
+pub enum Operation {
+    Insert(u64, u64),
+    Remove(u64)
+}
 
 pub fn insert_checked(vec: Vec<(u64, u64)>) {
     // insert the data in the cow btree
@@ -30,7 +35,38 @@ pub fn insert_checked(vec: Vec<(u64, u64)>) {
         assert!(std_k == cow.key);
         assert!(std_v == cow.value);
     }
+}
 
+pub fn insert_and_remove_checked(vec: Vec<Operation>) {
+    run_in_reactor_on_mem_backend(|handle| {
+        Box::new(async_btree_insert_and_remove_checked(handle.clone(), &vec))
+    }).unwrap();
+}
+
+pub fn raw_to_vec_of_operation(data: &[u8]) -> Vec<Operation> {
+    let mut data = Cursor::new(data);
+    let mut vec = Vec::new();
+
+    loop {
+        if data.remaining() < 1 {
+            break;
+        }
+        if data.get_u8() <= u8::MAX / 2 { // equal "probability" between inserts and removes
+            // insert
+            if data.remaining() < 8 + 8 {
+                break;
+            }
+            vec.push(Operation::Insert(data.get_u64::<LittleEndian>(), data.get_u64::<LittleEndian>()));
+        } else {
+            // remove
+            if data.remaining() < 8 {
+                break;
+            }
+            vec.push(Operation::Remove(data.get_u64::<LittleEndian>()));
+        }
+    }
+
+    vec
 }
 
 pub fn raw_to_vec_of_tuple_u64(data: &[u8]) -> Vec<(u64, u64)> {
@@ -97,5 +133,65 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
 
         // read the btree, the data should now be sorted
         await!(read_btree(handle.clone(), op.clone()))
+    }
+}
+
+fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operation>) -> impl Future<Item=(), Error=failure::Error> + 'f {
+    async_block!{
+        // create an identical std btree
+        use std::collections::BTreeMap;
+        let mut std_btree = BTreeMap::<u64, u64>::new();
+
+        // format
+        await!(format(handle.clone()))?;
+        let uberblock = await!(find_latest_uberblock(handle.clone()))?;
+        let (mut op, mut free_space_offset) = (uberblock.tree_root_pointer, uberblock.free_space_offset);
+
+        // process operations
+        for o in vec {
+            match o {
+                // insert in cow btree
+                Operation::Insert(k, v) => {
+                    let res = await!(insert_in_btree_2(
+                        handle.clone(),
+                        op.clone(),
+                        free_space_offset,
+                        LeafNodeEntry{key: *k, value: *v}
+                        ))?;
+                    op = res.0;
+                    free_space_offset = res.1;
+
+                    // insert in std btree
+                    std_btree.entry(*k).and_modify(|e| {*e = e.wrapping_add(*v).wrapping_mul(2)}).or_insert(*v);
+                }
+                Operation::Remove(k) => {
+                    // remove in cow btree
+                    let res = await!(remove(
+                        handle.clone(),
+                        op.clone(),
+                        free_space_offset,
+                        *k
+                        ))?;
+                    op = res.0;
+                    free_space_offset = res.1;
+
+                    // remove in std btree
+                    std_btree.remove(k);
+                }
+            };
+
+            // read the cow btree
+            let cow_btree = await!(read_btree(handle.clone(), op.clone()))?;
+
+            // check that both btrees are the same
+            for ((std_k, std_v), cow) in std_btree.iter().zip(cow_btree) {
+                //println!("key: {} == {}", std_k, cow.key);
+                //println!("val: {} == {}", std_v, cow.value);
+                assert!(*std_k == cow.key);
+                assert!(*std_v == cow.value);
+            }
+        }
+
+        Ok(())
     }
 }

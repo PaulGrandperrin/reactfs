@@ -1,5 +1,5 @@
 use std::mem;
-use std::{u64, usize};
+use std::u64;
 use super::*;
 
 // TODO: move to some utility module
