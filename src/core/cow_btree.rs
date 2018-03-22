@@ -679,9 +679,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     };
 
                     // we drain the source node into the destination node
-                    for i in src_node.entries.drain(..) { // TODO: maybe there is a better way to do that, in one function call
-                        dst_node.entries.push(i);
-                    }
+                    dst_node.entries.append(&mut src_node.entries);
+
                     // the entries should still be sorted
                     debug_assert!(is_sorted(dst_node.entries.iter().map(|l|{l.key})));
 
@@ -713,9 +712,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                             }
 
                             // move the entries from original child
-                            for i in entries.drain(..) { // TODO: maybe there is a better way to do that, in one function call
-                                child.entries.push(i);
-                            }
+                            child.entries.append(&mut entries);
 
                             // in node.entries, update key to child
                             node.entries[index].key = child.entries[0].key;
@@ -800,9 +797,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     };
 
                     // we drain the source node into the destination node
-                    for i in src_node.entries.drain(..) { // TODO: maybe there is a better way to do that, in one function call
-                        dst_node.entries.push(i);
-                    }
+                    dst_node.entries.append(&mut src_node.entries);
+
                     // the entries should still be sorted
                     debug_assert!(is_sorted(dst_node.entries.iter().map(|l|{l.key})));
 
@@ -834,9 +830,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                             }
 
                             // move the entries from original child
-                            for i in entries.drain(..) { // TODO: maybe there is a better way to do that, in one function call
-                                child.entries.push(i);
-                            }
+                            child.entries.append(&mut entries);
 
                             // in node.entries, update key to child
                             node.entries[index].key = child.entries[0].key;
