@@ -707,8 +707,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                             mem::swap(&mut child.entries, &mut entries);
 
                             // move the entries from neighbor
-                            for i in neighbor.entries.drain(nb_entries_to_move..) { // TODO: maybe there is a better way to do that, in one function call
-                                child.entries.push(i);
+                            for i in neighbor.entries.drain(nb_entries_to_move..) {
+                                child.entries.place_back() <- i;
                             }
 
                             // move the entries from original child
@@ -719,8 +719,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                         }
                          1 => { // we are merging with right neighbor
                             // move the entries
-                            for i in neighbor.entries.drain(..nb_entries_to_move) { // TODO: maybe there is a better way to do that, in one function call
-                                child.entries.push(i);
+                            for i in neighbor.entries.drain(..nb_entries_to_move) {
+                                child.entries.place_back() <- i;
                             }
 
                             // in node.entries, update key to neighbor
@@ -825,8 +825,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                             mem::swap(&mut child.entries, &mut entries);
 
                             // move the entries from neighbor
-                            for i in neighbor.entries.drain(nb_entries_to_move..) { // TODO: maybe there is a better way to do that, in one function call
-                                child.entries.push(i);
+                            for i in neighbor.entries.drain(nb_entries_to_move..) {
+                                child.entries.place_back() <- i;
                             }
 
                             // move the entries from original child
@@ -837,8 +837,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                         }
                          1 => { // we are merging with right neighbor
                             // move the entries
-                            for i in neighbor.entries.drain(..nb_entries_to_move) { // TODO: maybe there is a better way to do that, in one function call
-                                child.entries.push(i);
+                            for i in neighbor.entries.drain(..nb_entries_to_move) {
+                                child.entries.place_back() <- i;
                             }
 
                             // in node.entries, update key to neighbor
