@@ -71,11 +71,9 @@ impl LeafNode {
         debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
 
         let res = self.entries.binary_search_by_key(&entry.key, |e| e.key);
-        if let Ok(i) = res {
-            self.entries[i].value = self.entries[i].value.wrapping_add(entry.value).wrapping_mul(2); // non linear function
-        } else {
-            self.entries.push(entry);
-            self.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+        match res {
+            Ok(i)  => {self.entries[i].value = self.entries[i].value.wrapping_add(entry.value).wrapping_mul(2)}, // non linear function
+            Err(i) => self.entries.insert(i, entry),
         }
     }
 
@@ -142,6 +140,17 @@ impl InternalNode {
     }
 
     // --
+
+    fn insert(&mut self, entry: InternalNodeEntry) {
+        // algo invariant: the entries should be sorted
+        debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
+
+        let res = self.entries.binary_search_by_key(&entry.key, |e| e.key);
+        match res {
+            Ok(i)  => unreachable!("cow_btree: trying to insert in an InternalNode but key already exists"),
+            Err(i) => self.entries.insert(i, entry),
+        }
+    }
 
     fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
         async_block! {
@@ -234,8 +243,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 // maybe add new entry from a potentially split child
                 if let Some(new_entry) = maybe_new_entry {
-                    node.entries.push(new_entry);
-                    node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                    node.insert(new_entry);
                 }
 
                 // COW node
@@ -277,8 +285,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                     // maybe add new entry from a potentially split child
                     if let Some(new_entry) = maybe_new_entry {
-                        left_node.entries.push(new_entry);
-                        left_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                        left_node.insert(new_entry);
                     }
                 } else {
                     // algo invariant: the entries should be sorted
@@ -304,8 +311,7 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                     // maybe add new entry from a potentially split child
                     if let Some(new_entry) = maybe_new_entry {
-                        right_node.entries.push(new_entry);
-                        right_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                        right_node.insert(new_entry);
                     }
                 }
 
@@ -336,7 +342,6 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
         let mut new_root = InternalNode::new();
         new_root.entries.push(InternalNodeEntry{key: u64::MIN, object_pointer: new_op});
         new_root.entries.push(new_entry);
-        new_root.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
 
         let op_root = await!(new_root.cow(handle.clone(), &mut free_space_offset))?;
 
@@ -400,8 +405,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
                 cur_node.entries[index].object_pointer = left_op;
 
                 // push in current node new entry which points to right_node
-                cur_node.entries.push(InternalNodeEntry{key: median, object_pointer: right_op});
-                cur_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                cur_node.insert(InternalNodeEntry{key: median, object_pointer: right_op});
             }
 
             // COW that new node
@@ -432,8 +436,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
                 cur_node.entries[index].object_pointer = left_op;
 
                 // push in current node new entry which points to right_node
-                cur_node.entries.push(InternalNodeEntry{key: median, object_pointer: right_op});
-                cur_node.entries.sort_unstable_by_key(|entry| entry.key); // TODO be smart
+                cur_node.insert(InternalNodeEntry{key: median, object_pointer: right_op});
             }
 
             // COW that new node
