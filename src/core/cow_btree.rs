@@ -217,13 +217,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                 let res = node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
                 let index = match res {
-                    Ok(i) => { // exact match
-                        i
-                    }
-                    Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
-                    Err(i) => { // match first bigger key
-                        i - 1
-                    }
+                    Ok(i) => i, // exact match
+                    Err(0) => unreachable!("cow_btree: key should not be smaller than current's node smallest entry"),
+                    Err(i) => i - 1, // match first bigger key
                 };
 
                 // object pointer of branch where to insert
@@ -263,13 +259,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                     let res = left_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
                     let index = match res {
-                        Ok(i) => { // exact match
-                            i
-                        }
-                        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
-                        Err(i) => { // match first bigger key
-                            i - 1
-                        }
+                        Ok(i) => i, // exact match
+                        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node smallest entry"),
+                        Err(i) => i - 1, // match first bigger key
                     };
 
                     // object pointer of branch where to insert
@@ -294,13 +286,9 @@ fn insert_in_btree_rec(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
                     let res = right_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
                     let index = match res {
-                        Ok(i) => { // exact match
-                            i
-                        }
-                        Err(0) => unreachable!("new key cannot be smaller than first key of right split"),
-                        Err(i) => { // match first bigger key
-                            i - 1
-                        }
+                        Ok(i) => i, // exact match
+                        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node smallest entry"),
+                        Err(i) => i - 1, // match first bigger key
                     };
 
                     // object pointer of branch where to insert
@@ -382,13 +370,9 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
 
     let res = cur_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
     let index = match res {
-        Ok(i) => { // exact match
-            i
-        }
-        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
-        Err(i) => { // match first bigger key
-            i - 1
-        }
+        Ok(i) => i, // exact match
+        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node smallest entry"),
+        Err(i) => i - 1, // match first bigger key
     };
 
     // object pointer of branch where to insert
@@ -606,15 +590,13 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
             debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
 
             let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
-            match res {
-                Ok(i) => { // exact match
-                    return await!(get(handle.clone(), node.entries[i].object_pointer.clone(), key));
-                }
-                Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
-                Err(i) => { // match first bigger key
-                    return await!(get(handle.clone(), node.entries[i-1].object_pointer.clone(), key));
-                }
-            }
+            let index = match res {
+                Ok(i) => i, // exact match
+                Err(0) => unreachable!("cow_btree: key should not be smaller than current's node smallest entry"),
+                Err(i) => i - 1, // match first bigger key
+            };
+
+            await!(get(handle.clone(), node.entries[index].object_pointer.clone(), key))
         }
     }
 }
@@ -661,13 +643,9 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
 
     let res = node.entries.binary_search_by_key(&key, |entry| entry.key);
     let index = match res {
-        Ok(i) => { // exact match
-            i
-        }
-        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node first entry"),
-        Err(i) => { // match first bigger key
-            i - 1
-        }
+        Ok(i) => i, // exact match
+        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node smallest entry"),
+        Err(i) => i - 1, // match first bigger key
     };
 
     // read the child on the way to the key to delete
