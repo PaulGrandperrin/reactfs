@@ -43,7 +43,7 @@ pub fn insert_and_remove_checked(vec: Vec<Operation>) {
     }).unwrap();
 }
 
-pub fn raw_to_vec_of_operation(data: &[u8]) -> Vec<Operation> {
+pub fn raw_to_vec_of_operation(data: &[u8]) -> Option<Vec<Operation>> {
     let mut data = Cursor::new(data);
     let mut vec = Vec::new();
 
@@ -51,22 +51,26 @@ pub fn raw_to_vec_of_operation(data: &[u8]) -> Vec<Operation> {
         if data.remaining() < 1 {
             break;
         }
-        if data.get_u8() <= u8::MAX / 2 { // equal "probability" between inserts and removes
-            // insert
-            if data.remaining() < 8 + 8 {
-                break;
+        match data.get_u8() {
+            0 => { // insert
+                if data.remaining() < 2 + 2 {
+                    break;
+                }
+                vec.push(Operation::Insert(data.get_u16::<LittleEndian>() as u64, data.get_u16::<LittleEndian>() as u64));
             }
-            vec.push(Operation::Insert(data.get_u64::<LittleEndian>(), data.get_u64::<LittleEndian>()));
-        } else {
-            // remove
-            if data.remaining() < 8 {
-                break;
+            1 => { // remove
+                if data.remaining() < 2 {
+                    break;
+                }
+                vec.push(Operation::Remove(data.get_u16::<LittleEndian>() as u64));
             }
-            vec.push(Operation::Remove(data.get_u64::<LittleEndian>()));
+            _ => {
+                return None;
+            }
         }
     }
 
-    vec
+    Some(vec)
 }
 
 pub fn raw_to_vec_of_tuple_u64(data: &[u8]) -> Vec<(u64, u64)> {
