@@ -47,26 +47,18 @@ pub fn raw_to_vec_of_operation(data: &[u8]) -> Option<Vec<Operation>> {
     let mut data = Cursor::new(data);
     let mut vec = Vec::new();
 
-    loop {
-        if data.remaining() < 1 {
-            break;
-        }
+    for counter in 0.. {
+        if data.remaining() < 1 {break}
         match data.get_u8() {
             0 => { // insert
-                if data.remaining() < 2 + 2 {
-                    break;
-                }
-                vec.push(Operation::Insert(data.get_u16::<LittleEndian>() as u64, data.get_u16::<LittleEndian>() as u64));
+                if data.remaining() < 2 {break}
+                vec.push(Operation::Insert(data.get_u16::<LittleEndian>() as u64, counter));
             }
             1 => { // remove
-                if data.remaining() < 2 {
-                    break;
-                }
+                if data.remaining() < 2 {break;}
                 vec.push(Operation::Remove(data.get_u16::<LittleEndian>() as u64));
             }
-            _ => {
-                return None;
-            }
+            _ => return None
         }
     }
 
