@@ -674,6 +674,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
 
                 // TODO: add assert
                 let removed_value = if child.entries.len() + neighbor.entries.len() <= BTREE_DEGREE { // if there is enough space to do a full merge
+                    fuzz_marker!("cow_btree_remove_full_merge_leaf");
+
                     // figure out the direction of which node will be merge into which
                     let (mut src_node, src_index, mut dst_node, dst_index) = match neighbor_index as isize - index as isize {
                         -1 => (*child, index, neighbor, neighbor_index), // we are merging with left neighbor
@@ -706,6 +708,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
 
                     match neighbor_index as isize - index as isize {
                         -1 => { // we are merging with left neighbor
+                            fuzz_marker!("cow_btree_remove_partial_merge_left_leaf");
+
                             let mut entries = Vec::new();
                             mem::swap(&mut child.entries, &mut entries);
 
@@ -721,6 +725,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                             node.entries[index].key = child.entries[0].key;
                         }
                          1 => { // we are merging with right neighbor
+                            fuzz_marker!("cow_btree_remove_partial_merge_right_leaf");
+
                             // move the entries
                             for i in neighbor.entries.drain(..nb_entries_to_move) {
                                 child.entries.place_back() <- i;
@@ -757,6 +763,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
                     return Ok((op, free_space_offset, removed_value));
                 } else { // we are the root node and we can pop the head
+                    fuzz_marker!("cow_btree_remove_pop_head_leaf");
                     return Ok((node.entries.remove(0).object_pointer, free_space_offset, removed_value));
                 }
             } else { // there is enough entries in the node: no need to merge
@@ -792,6 +799,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
 
                 // TODO: add assert
                 let removed_value = if child.entries.len() + neighbor.entries.len() <= BTREE_DEGREE { // if there is enough space to do a full merge
+                    fuzz_marker!("cow_btree_remove_full_merge_internal");
                     // figure out the direction of which node will be merge into which
                     let (mut src_node, src_index, mut dst_node, dst_index) = match neighbor_index as isize - index as isize {
                         -1 => (*child, index, neighbor, neighbor_index), // we are merging with left neighbor
@@ -824,6 +832,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
 
                     match neighbor_index as isize - index as isize {
                         -1 => { // we are merging with left neighbor
+                            fuzz_marker!("cow_btree_remove_partial_merge_left_internal");
+
                             let mut entries = Vec::new();
                             mem::swap(&mut child.entries, &mut entries);
 
@@ -839,6 +849,8 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                             node.entries[index].key = child.entries[0].key;
                         }
                          1 => { // we are merging with right neighbor
+                            fuzz_marker!("cow_btree_remove_partial_merge_right_internal");
+
                             // move the entries
                             for i in neighbor.entries.drain(..nb_entries_to_move) {
                                 child.entries.place_back() <- i;
@@ -875,6 +887,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
                     return Ok((op, free_space_offset, removed_value));
                 } else { // we are the root node and we can pop the head
+                    fuzz_marker!("cow_btree_remove_pop_head_internal");
                     return Ok((node.entries.remove(0).object_pointer, free_space_offset, removed_value));
                 }
             } else { // there is enough entries in the node: no need to merge

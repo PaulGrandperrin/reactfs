@@ -18,6 +18,9 @@ extern crate quickcheck;
 #[macro_use]
 extern crate proptest;
 
+#[macro_use]
+extern crate fuzztest;
+
 use std::thread;
 use std::sync::mpsc::channel;
 use futures::prelude::*;
