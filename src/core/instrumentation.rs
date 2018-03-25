@@ -125,6 +125,9 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
                 ))?;
             op = res.0;
             free_space_offset = res.1;
+
+            // check that the key wasn't already there
+            assert!(res.2 == None);
         }
 
         // read the btree, the data should now be sorted
@@ -158,7 +161,10 @@ fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operat
                     free_space_offset = res.1;
 
                     // insert in std btree
-                    std_btree.entry(*k).and_modify(|e| {*e = e.wrapping_add(*v).wrapping_mul(2)}).or_insert(*v);
+                    let std_old_value = std_btree.insert(*k, *v);
+
+                    // check that the potential old value is the same
+                    assert!(std_old_value == res.2);
                 }
                 Operation::Remove(k) => {
                     // remove in cow btree
@@ -172,7 +178,10 @@ fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operat
                     free_space_offset = res.1;
 
                     // remove in std btree
-                    std_btree.remove(k);
+                    let std_old_value = std_btree.remove(k);
+
+                    // check that the potential old value is the same
+                    assert!(std_old_value == res.2);
                 }
             };
 
