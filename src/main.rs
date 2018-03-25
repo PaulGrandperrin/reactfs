@@ -37,8 +37,8 @@ pub mod backend;
 pub mod core;
 
 fn main() {
-	let vec = vec![(3,30), (1,10),(2,20), (4,40), (5,50),
-				   (6,60), (7,70)];
-	
-	core::instrumentation::insert_checked(vec);
+    let vec = vec![(3,30), (1,10),(2,20), (4,40), (5,50),
+                   (6,60), (7,70)];
+    
+    core::instrumentation::insert_checked(vec);
 }
