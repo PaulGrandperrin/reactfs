@@ -25,7 +25,7 @@ pub fn insert_checked(vec: Vec<(u64, u64)>) {
     use std::collections::BTreeMap;
     let mut std_btree = BTreeMap::<u64, u64>::new();
     for (k, v) in vec {
-        std_btree.entry(k).and_modify(|e| {*e = e.wrapping_add(v).wrapping_mul(2)}).or_insert(v);
+        std_btree.insert(k, v);
     }
 
     // check that both btrees are the same
