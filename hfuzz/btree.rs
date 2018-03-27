@@ -1,7 +1,6 @@
 extern crate reactfs;
 #[macro_use] extern crate honggfuzz;
 
-#[cfg(all(fuzzing))]
 use reactfs::core::instrumentation::*;
 
 fn main() {
