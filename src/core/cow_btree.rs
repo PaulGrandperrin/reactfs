@@ -767,10 +767,16 @@ pub fn remove(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: u6
 
     let (op, new_free_space_offset, removed_value) = match any_object {
         AnyObject::LeafNode(node) => {
-            await!(remove_in_leaf(handle.clone(), *node, free_space_offset, key))?
+            match node.entries.len() > 0 && key < node.entries[0].key { // if the key is smaller than the smallest key
+                true  => (op, free_space_offset, None), // the key cannot be in the btree
+                false => await!(remove_in_leaf(handle.clone(), *node, free_space_offset, key))?
+            }
         }
         AnyObject::InternalNode(node) => {
-            await!(remove_in_internal(handle.clone(), *node, free_space_offset, key))?
+            match node.entries.len() > 0 && key < node.entries[0].key { // if the key is smaller than the smallest key
+                true  => (op, free_space_offset, None), // the key cannot be in the btree
+                false => await!(remove_in_internal(handle.clone(), *node, free_space_offset, key))?
+            }
         }
     };
 
