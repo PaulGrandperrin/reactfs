@@ -72,7 +72,7 @@ fn main() {
     }
 }
 
-fn start() -> Result<(), failure::Error> {
+fn start() -> Result<()> {
     let vec = vec![(3,30), (1,10),(2,20), (4,40), (5,50),
                    (6,60), (7,70)];
     
