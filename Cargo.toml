@@ -32,3 +32,4 @@ required-features = ["instrumentation"]
 [[bin]]
 name = "hfuzz-btree"
 path = "hfuzz/btree.rs"
+required-features = ["instrumentation"]
