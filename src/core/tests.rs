@@ -56,7 +56,7 @@ fn cow_btree_increasing_async(handle: Handle, n: usize) -> Result<(), failure::E
     let (mut op, mut free_space_offset) = (uberblock.tree_root_pointer, uberblock.free_space_offset);
 
     for i in (0..n) {
-        let res = await!(insert_in_btree_2(
+        let res = await!(insert_in_btree(
             handle.clone(),
             op.clone(),
             free_space_offset,
@@ -136,7 +136,7 @@ fn cow_btree_random_async(handle: Handle) -> Result<(), failure::Error> {
         ];
 
     for i in v {
-        let res = await!(insert_in_btree_2(
+        let res = await!(insert_in_btree(
             handle.clone(),
             op.clone(),
             free_space_offset,
