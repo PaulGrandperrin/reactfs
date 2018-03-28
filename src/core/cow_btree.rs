@@ -178,7 +178,7 @@ impl InternalNode {
 
 /// insert or go in entry then split 
 #[async]
-fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, u64, Option<u64>), failure::Error> {
     // algo invariant: the entries should be sorted
     debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
 
@@ -187,20 +187,22 @@ fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, e
     // COW node
     let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
 
-    Ok((op, free_space_offset, old_value))
+    let entry = InternalNodeEntry::new(node.entries[0].key, op);
+
+    Ok((entry, free_space_offset, old_value))
 }
 
 /// insert or go in entry then split 
 #[async(boxed)]
-fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, u64, Option<u64>), failure::Error> {
     // algo invariant: the entries should be sorted
     debug_assert!(is_sorted(cur_node.entries.iter().map(|l|{l.key})));
 
     let res = cur_node.entries.binary_search_by_key(&entry_to_insert.key, |entry| entry.key);
     let index = match res {
         Ok(i) => i, // exact match
-        Err(0) => unreachable!("cow_btree: key should not be smaller than current's node smallest entry"),
-        Err(i) => i - 1, // match first bigger key
+        Err(0) => 0, // key is smaller than first entry
+        Err(i) => i - 1, // match first bigger entry
     };
 
     // object pointer of branch where to insert
@@ -214,23 +216,23 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             // algo invariant
             debug_assert!(child_node.entries.len() >= BTREE_B && child_node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
             let old_value = if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
-                let (child_op, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
+                let (child_entry, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
-                // in current's node selected entry, update object pointer to point to new child node
-                cur_node.entries[index].object_pointer = child_op;
+                // update current's node selected entry
+                cur_node.entries[index] = child_entry;
 
                 old_value
             } else { // split
                 // split the node and insert in relevant child
-                let (left_op, right_op, new_free_space_offset, median, old_value) = await!(leaf_split_and_insert(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
+                let (left_entry, right_entry, new_free_space_offset, old_value) = await!(leaf_split_and_insert(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
-                // in current's node selected entry, update object pointer to point to left node
-                cur_node.entries[index].object_pointer = left_op;
+                // update current's node selected entry
+                cur_node.entries[index] = left_entry;
 
                 // push in current node new entry which points to right_node
-                cur_node.insert(InternalNodeEntry{key: median, object_pointer: right_op});
+                cur_node.insert(right_entry);
 
                 old_value
             };
@@ -238,9 +240,11 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             // COW that new node
             let op = await!(cur_node.cow(handle.clone(), &mut free_space_offset))?;
 
+            let entry = InternalNodeEntry::new(cur_node.entries[0].key, op);
+
             // return
             Ok((
-                op,
+                entry,
                 free_space_offset,
                 old_value
             ))
@@ -250,23 +254,23 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             debug_assert!(child_node.entries.len() >= BTREE_B && child_node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
 
             let old_value = if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
-                let (child_op, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
+                let (child_entry, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
-                // in current's node selected entry, update object pointer to point to new child node
-                cur_node.entries[index].object_pointer = child_op;
+                // update current's node selected entry
+                cur_node.entries[index] = child_entry;
 
                 old_value
             } else { // split
                 // split the node and insert in relevant child
-                let (left_op, right_op, new_free_space_offset, median, old_value) = await!(internal_split_and_insert(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
+                let (left_entry, right_entry, new_free_space_offset, old_value) = await!(internal_split_and_insert(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
-                // in current's node selected entry, update object pointer to point to left node
-                cur_node.entries[index].object_pointer = left_op;
+                // update current's node selected entry
+                cur_node.entries[index] = left_entry;
 
                 // push in current node new entry which points to right_node
-                cur_node.insert(InternalNodeEntry{key: median, object_pointer: right_op});
+                cur_node.insert(right_entry);
 
                 old_value
             };
@@ -274,9 +278,11 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             // COW that new node
             let op = await!(cur_node.cow(handle.clone(), &mut free_space_offset))?;
 
+            let entry = InternalNodeEntry::new(cur_node.entries[0].key, op);
+
             // return
             Ok((
-                op,
+                entry,
                 free_space_offset,
                 old_value
             ))
@@ -285,7 +291,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
 }
 
 #[async]
-fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, ObjectPointer, u64, u64, Option<u64>), failure::Error> {
+fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, InternalNodeEntry, u64, Option<u64>), failure::Error> {
     // rename node to left_node ...
     let mut left_node = node;
     // ... and split off its right half to right_node
@@ -294,28 +300,28 @@ fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64,
         entries: right_entries
     };
 
-    let median = right_node.entries[0].key;
-
     // insert entry in either node
-    let (left_op, right_op, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
+    let (left_entry, right_entry, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
         // TODO maybe inlining insert_in_internal_node code would be simpler
-        let (left_op, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), left_node, free_space_offset, entry_to_insert))?;
+        let (left_entry, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), left_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let right_op = await!(right_node.cow(handle.clone(), &mut free_space_offset))?;
-        (left_op, right_op, old_value)
+        let right_entry = InternalNodeEntry::new(right_node.entries[0].key, right_op);
+        (left_entry, right_entry, old_value)
     } else {
         // TODO maybe inlining insert_in_internal_node code would be simpler
-        let (right_op, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), right_node, free_space_offset, entry_to_insert))?;
+        let (right_entry, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), right_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let left_op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
-        (left_op, right_op, old_value)
+        let left_entry = InternalNodeEntry::new(left_node.entries[0].key, left_op);
+        (left_entry, right_entry, old_value)
     };
 
-    Ok((left_op, right_op, free_space_offset, median, old_value))
+    Ok((left_entry, right_entry, free_space_offset, old_value))
 }
 
 #[async]
-fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, ObjectPointer, u64, u64, Option<u64>), failure::Error> {
+fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, InternalNodeEntry, u64, Option<u64>), failure::Error> {
     // rename node to left_node ...
     let mut left_node = node;
     // ... and split off its right half to right_node
@@ -324,24 +330,24 @@ fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offs
         entries: right_entries
     };
 
-    let median = right_node.entries[0].key;
-
     // insert entry in either node
-    let (left_op, right_op, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
+    let (left_entry, right_entry, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
         // TODO maybe inlining insert_in_internal_node code would be simpler
-        let (left_op, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), left_node, free_space_offset, entry_to_insert))?;
+        let (left_entry, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), left_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let right_op = await!(right_node.cow(handle.clone(), &mut free_space_offset))?;
-        (left_op, right_op, old_value)
+        let right_entry = InternalNodeEntry::new(right_node.entries[0].key, right_op);
+        (left_entry, right_entry, old_value)
     } else {
         // TODO maybe inlining insert_in_internal_node code would be simpler
-        let (right_op, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), right_node, free_space_offset, entry_to_insert))?;
+        let (right_entry, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), right_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let left_op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
-        (left_op, right_op, old_value)
+        let left_entry = InternalNodeEntry::new(left_node.entries[0].key, left_op);
+        (left_entry, right_entry, old_value)
     };
 
-    Ok((left_op, right_op, free_space_offset, median, old_value))
+    Ok((left_entry, right_entry, free_space_offset, old_value))
 }
 
 #[async]
@@ -356,20 +362,21 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
             if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
-                let (left_op, right_op, new_free_space_offset, median, old_value) = await!(leaf_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
+                let (left_entry, right_entry, new_free_space_offset, old_value) = await!(leaf_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
                 // create new root
                 let mut new_root = InternalNode::new();
-                new_root.entries.push(InternalNodeEntry{key: u64::MIN, object_pointer: left_op});
-                new_root.entries.push(InternalNodeEntry{key: median, object_pointer: right_op});
+                new_root.entries.push(left_entry);
+                new_root.entries.push(right_entry);
                 // no need to sort
 
                 // COW new root
                 let new_op = await!(new_root.cow(handle.clone(), &mut free_space_offset))?;
                 (new_op, free_space_offset, old_value)
             } else {
-                await!(insert_in_leaf_node(handle, *node, free_space_offset, entry_to_insert))?
+                let (entry, free_space_offset, old_value) = await!(insert_in_leaf_node(handle, *node, free_space_offset, entry_to_insert))?;
+                (entry.object_pointer, free_space_offset, old_value)
             }
         }
         AnyObject::InternalNode(node) => {
@@ -378,20 +385,21 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
 
             if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
-                let (left_op, right_op, new_free_space_offset, median, old_value) = await!(internal_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
+                let (left_entry, right_entry, new_free_space_offset, old_value) = await!(internal_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
                 // create new root
                 let mut new_root = InternalNode::new();
-                new_root.entries.push(InternalNodeEntry{key: u64::MIN, object_pointer: left_op});
-                new_root.entries.push(InternalNodeEntry{key: median, object_pointer: right_op});
+                new_root.entries.push(left_entry);
+                new_root.entries.push(right_entry);
                 // no need to sort
 
                 // COW new root
                 let new_op = await!(new_root.cow(handle.clone(), &mut free_space_offset))?;
                 (new_op, free_space_offset, old_value)
             } else {
-                await!(insert_in_internal_node(handle, *node, free_space_offset, entry_to_insert))?
+                let (entry, free_space_offset, old_value) = await!(insert_in_internal_node(handle, *node, free_space_offset, entry_to_insert))?;
+                (entry.object_pointer, free_space_offset, old_value)
             }
         }
     };

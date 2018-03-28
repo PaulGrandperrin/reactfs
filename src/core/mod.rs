@@ -46,6 +46,12 @@ struct InternalNodeEntry {
     object_pointer: ObjectPointer
 }
 
+impl InternalNodeEntry {
+    fn new(key: u64, object_pointer: ObjectPointer) -> InternalNodeEntry {
+        InternalNodeEntry{key, object_pointer}
+    }
+}
+
 #[derive(Debug)]
 pub struct InternalNode {
     entries: Vec<InternalNodeEntry>,
