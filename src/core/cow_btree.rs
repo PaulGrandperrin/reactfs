@@ -3,6 +3,12 @@ use std::u64;
 use super::*;
 use super::util::*;
 
+impl<K, V> NodeEntry<K, V> {
+    fn new(key: K, value: V) -> Self {
+        Self {key, value}
+    }
+}
+
 impl LeafNode {
     pub fn new() -> LeafNode {
         LeafNode {

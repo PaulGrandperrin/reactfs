@@ -61,12 +61,6 @@ pub struct NodeEntry<K, V> {
     value: V
 }
 
-impl<K, V> NodeEntry<K, V> {
-    fn new(key: K, value: V) -> Self {
-        Self {key, value}
-    }
-}
-
 #[derive(Debug)]
 pub struct Node<T> {
     entries: Vec<T>,
