@@ -97,7 +97,7 @@ impl InternalNode {
         while bytes.remaining() >= 8 + (8 + 8 + 1) {
             let key = bytes.get_u64::<LittleEndian>();
             let object_pointer = ObjectPointer::from_bytes(bytes)?;
-            entries.push(InternalNodeEntry{key, object_pointer});
+            entries.push(InternalNodeEntry{key, value: object_pointer});
         }
 
         debug_assert!(bytes.remaining() == 0);
@@ -120,7 +120,7 @@ impl InternalNode {
     fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
         debug_assert!(bytes.remaining_mut() >= self.entries.len() * (8 + (8 + 8 + 1)));
 
-        for InternalNodeEntry{key, object_pointer} in &self.entries {
+        for InternalNodeEntry{key, value: object_pointer} in &self.entries {
             bytes.put_u64::<LittleEndian>(*key);
             object_pointer.to_bytes(bytes);
         }
@@ -191,7 +191,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
     };
 
     // object pointer of branch where to insert
-    let op = cur_node.entries[index].object_pointer.clone();
+    let op = cur_node.entries[index].value.clone();
     
     // read pointed object
     let any_object = await!(op.async_read_object(handle.clone()))?;
@@ -361,7 +361,7 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 (new_op, free_space_offset, old_value)
             } else {
                 let (entry, free_space_offset, old_value) = await!(insert_in_leaf_node(handle, *node, free_space_offset, entry_to_insert))?;
-                (entry.object_pointer, free_space_offset, old_value)
+                (entry.value, free_space_offset, old_value)
             }
         }
         AnyObject::InternalNode(node) => {
@@ -384,7 +384,7 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
                 (new_op, free_space_offset, old_value)
             } else {
                 let (entry, free_space_offset, old_value) = await!(insert_in_internal_node(handle, *node, free_space_offset, entry_to_insert))?;
-                (entry.object_pointer, free_space_offset, old_value)
+                (entry.value, free_space_offset, old_value)
             }
         }
     };
@@ -425,7 +425,7 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
                 Err(i) => i - 1, // match first bigger key
             };
 
-            await!(get(handle.clone(), node.entries[index].object_pointer.clone(), key))
+            await!(get(handle.clone(), node.entries[index].value.clone(), key))
         }
     }
 }
@@ -478,7 +478,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
     };
 
     // read the child on the way to the key to delete
-    let child = await!(node.entries[index].object_pointer.async_read_object(handle.clone()))?;
+    let child = await!(node.entries[index].value.async_read_object(handle.clone()))?;
 
     match child {
         AnyObject::LeafNode(mut child) => {
@@ -493,7 +493,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     unreachable!("cow_btree: all node should have at least one neighbor at any time!");
                 };
 
-                let mut neighbor = match await!(node.entries[neighbor_index].object_pointer.async_read_object(handle.clone()))? { // TODO: use trait
+                let mut neighbor = match await!(node.entries[neighbor_index].value.async_read_object(handle.clone()))? { // TODO: use trait
                     AnyObject::LeafNode(n) => *n,
                     AnyObject::InternalNode(_) => unreachable!("cow_btree: all sibling should be of the same kind")
                 };
@@ -520,7 +520,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     free_space_offset = new_free_space_offset;
 
                     // update child entry to point to the new node
-                    node.entries[dst_index].object_pointer = op;
+                    node.entries[dst_index].value = op;
 
                     // TODO: try to swap the above and below lines and see if the fuzzer catches the bug
 
@@ -575,11 +575,11 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     free_space_offset = new_free_space_offset;
 
                     // update child entry to point to the new node
-                    node.entries[index].object_pointer = child_op;
+                    node.entries[index].value = child_op;
 
                     // COW the neighbor
                     let neighbor_op = await!(neighbor.cow(handle.clone(), &mut free_space_offset))?;
-                    node.entries[neighbor_index].object_pointer = neighbor_op;
+                    node.entries[neighbor_index].value = neighbor_op;
 
                     removed_value
                 };
@@ -590,7 +590,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     return Ok((op, free_space_offset, removed_value));
                 } else { // we are the root node and we can pop the head
                     fuzz_marker!("cow_btree_remove_pop_head_leaf");
-                    return Ok((node.entries.remove(0).object_pointer, free_space_offset, removed_value));
+                    return Ok((node.entries.remove(0).value, free_space_offset, removed_value));
                 }
             } else { // there is enough entries in the node: no need to merge
                 // TODO: find a way to factorize this code with the merge code
@@ -599,7 +599,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                 free_space_offset = new_free_space_offset;
 
                 // update child entry to point to the new node
-                node.entries[index].object_pointer = op;
+                node.entries[index].value = op;
 
                 // COW the node
                 let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
@@ -618,7 +618,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     unreachable!("cow_btree: all node should have at least one neighbor at any time!");
                 };
 
-                let mut neighbor = match await!(node.entries[neighbor_index].object_pointer.async_read_object(handle.clone()))? { // TODO: use trait
+                let mut neighbor = match await!(node.entries[neighbor_index].value.async_read_object(handle.clone()))? { // TODO: use trait
                     AnyObject::InternalNode(n) => *n,
                     AnyObject::LeafNode(_) => unreachable!("cow_btree: all sibling should be of the same kind")
                 };
@@ -644,7 +644,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     free_space_offset = new_free_space_offset;
 
                     // update child entry to point to the new node
-                    node.entries[dst_index].object_pointer = op;
+                    node.entries[dst_index].value = op;
 
                     // TODO: try to swap the above and below lines and see if the fuzzer catches the bug
 
@@ -699,11 +699,11 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     free_space_offset = new_free_space_offset;
 
                     // update child entry to point to the new node
-                    node.entries[index].object_pointer = child_op;
+                    node.entries[index].value = child_op;
 
                     // COW the neighbor
                     let neighbor_op = await!(neighbor.cow(handle.clone(), &mut free_space_offset))?;
-                    node.entries[neighbor_index].object_pointer = neighbor_op;
+                    node.entries[neighbor_index].value = neighbor_op;
 
                     removed_value
                 };
@@ -714,7 +714,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     return Ok((op, free_space_offset, removed_value));
                 } else { // we are the root node and we can pop the head
                     fuzz_marker!("cow_btree_remove_pop_head_internal");
-                    return Ok((node.entries.remove(0).object_pointer, free_space_offset, removed_value));
+                    return Ok((node.entries.remove(0).value, free_space_offset, removed_value));
                 }
             } else { // there is enough entries in the node: no need to merge
                 // TODO: find a way to factorize this code with the merge code
@@ -723,7 +723,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                 free_space_offset = new_free_space_offset;
 
                 // update child entry to point to the new node
-                node.entries[index].object_pointer = op;
+                node.entries[index].value = op;
 
                 // COW the node
                 let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
@@ -785,7 +785,7 @@ pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Res
 
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
             for n in node.entries {
-                await!(print_btree(handle.clone(), n.object_pointer, indentation + 1))?;
+                await!(print_btree(handle.clone(), n.value, indentation + 1))?;
             }
         }
     }
@@ -814,7 +814,7 @@ pub fn read_btree(handle: Handle, op: ObjectPointer) -> Result<Vec<LeafNodeEntry
             debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
 
             for n in node.entries {
-                let mut res = await!(read_btree(handle.clone(), n.object_pointer))?;
+                let mut res = await!(read_btree(handle.clone(), n.value))?;
                 v.append(&mut res);
             }
         }

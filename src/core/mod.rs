@@ -28,6 +28,13 @@ const BTREE_B: usize = 2;
 const BTREE_DEGREE: usize = BTREE_B*2+1;
 const BTREE_SPLIT: usize = BTREE_B+1;
 
+#[derive(Debug)]
+pub struct Uberblock {
+    tgx: u64,
+    free_space_offset: u64,
+    tree_root_pointer: ObjectPointer,
+}
+
 #[derive(Debug, Clone, Primitive)]
 pub enum ObjectType {
     InternalNode = 0,
@@ -40,34 +47,6 @@ pub enum AnyObject {
     InternalNode(Box<InternalNode>),
 }
 
-#[derive(Debug)]
-struct InternalNodeEntry {
-    key: u64,
-    object_pointer: ObjectPointer
-}
-
-impl InternalNodeEntry {
-    fn new(key: u64, object_pointer: ObjectPointer) -> InternalNodeEntry {
-        InternalNodeEntry{key, object_pointer}
-    }
-}
-
-#[derive(Debug)]
-pub struct InternalNode {
-    entries: Vec<InternalNodeEntry>,
-}
-
-#[derive(Debug)]
-pub struct LeafNodeEntry {
-    key: u64,
-    value: u64
-}
-
-#[derive(Debug)]
-pub struct LeafNode {
-    entries: Vec<LeafNodeEntry>,
-}
-
 #[derive(Debug, Clone)]
 pub struct ObjectPointer {
     offset: u64,
@@ -77,8 +56,24 @@ pub struct ObjectPointer {
 }
 
 #[derive(Debug)]
-pub struct Uberblock {
-    tgx: u64,
-    free_space_offset: u64,
-    tree_root_pointer: ObjectPointer,
+pub struct NodeEntry<K, V> {
+    key: K,
+    value: V
 }
+
+impl<K, V> NodeEntry<K, V> {
+    fn new(key: K, value: V) -> Self {
+        Self {key, value}
+    }
+}
+
+#[derive(Debug)]
+pub struct Node<T> {
+    entries: Vec<T>,
+}
+
+pub type LeafNodeEntry = NodeEntry<u64, u64>;
+pub type InternalNodeEntry = NodeEntry<u64, ObjectPointer>;
+
+pub type InternalNode = Node<InternalNodeEntry>;
+pub type LeafNode = Node<LeafNodeEntry>;
