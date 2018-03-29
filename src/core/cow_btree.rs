@@ -1,22 +1,7 @@
 use std::mem;
 use std::u64;
 use super::*;
-
-// TODO: move to some utility module
-#[inline]
-fn is_sorted<I: Iterator<Item=T>, T: Ord>(mut it: I) -> bool {
-    let last: T = match it.next() {
-        Some(i) => i,
-        None => return true
-    };
-
-    for i in it {
-        if i <= last {
-            return false;
-        }
-    }
-    true
-}
+use super::util::*;
 
 impl LeafNode {
     pub fn new() -> LeafNode {
