@@ -9,13 +9,15 @@ impl<K, V> NodeEntry<K, V> {
     }
 }
 
-impl LeafNode {
-    pub fn new() -> LeafNode {
-        LeafNode {
+impl<T> Node<T> {
+    pub fn new() -> Self {
+        Self {
             entries: vec![],
         }
     }
+}
 
+impl LeafNode {
     pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<LeafNode, failure::Error> {
         let mut entries = vec![];
 
@@ -90,13 +92,6 @@ impl LeafNode {
 }
 
 impl InternalNode {
-
-    pub fn new() -> InternalNode {
-        InternalNode {
-            entries: vec![],
-        }
-    }
-
     pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<InternalNode, failure::Error> {
         let mut entries = vec![];
 
