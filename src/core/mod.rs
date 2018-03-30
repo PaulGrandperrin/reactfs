@@ -77,13 +77,13 @@ impl ConstUsize for ConstUsize3 {
 // generic btree types
 
 #[derive(Debug)]
-pub struct NodeEntry<K: Serializable, V: Serializable> {
+pub struct NodeEntry<K: Serializable + Ord, V: Serializable> {
     key: K,
     value: V
 }
 
 #[derive(Debug)]
-pub struct Node<K: Serializable, V: Serializable, B: ConstUsize> {
+pub struct Node<K: Serializable + Ord, V: Serializable, B: ConstUsize> {
     entries: Vec<NodeEntry<K, V>>,
     b: PhantomData<B>,
 }

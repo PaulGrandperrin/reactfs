@@ -3,13 +3,13 @@ use std::u64;
 use super::*;
 use super::util::*;
 
-impl<K: Serializable, V: Serializable> NodeEntry<K, V> {
+impl<K: Serializable + Ord, V: Serializable> NodeEntry<K, V> {
     fn new(key: K, value: V) -> Self {
         Self {key, value}
     }
 }
 
-impl<K: Serializable, V: Serializable, B: ConstUsize> Node<K, V, B> {
+impl<K: Serializable + Ord, V: Serializable, B: ConstUsize> Node<K, V, B> {
     pub fn new() -> Self {
         Self {
             entries: vec![],
@@ -58,6 +58,7 @@ impl<K: Serializable, V: Serializable, B: ConstUsize> Node<K, V, B> {
     pub fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
         handle.write(self.to_mem().to_vec(), offset)
     }
+
 }
 
 impl LeafNode {

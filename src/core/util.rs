@@ -27,7 +27,7 @@ pub fn format(handle: Handle) -> Result<(), failure::Error> {
 }
 
 #[inline]
-pub fn is_sorted<I: Iterator<Item=T>, T: Ord>(mut it: I) -> bool {
+pub fn is_sorted<I: Iterator<Item=T>, T: PartialOrd>(mut it: I) -> bool {
     let last: T = match it.next() {
         Some(i) => i,
         None => return true
