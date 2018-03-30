@@ -12,12 +12,12 @@ impl<K: Serializable + Ord + Copy, V: Serializable> NodeEntry<K, V> {
     }
 }
 
-impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, M> Node<K, V, B, M> {
+impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, T: ConstObjectType> Node<K, V, B, T> {
     pub fn new() -> Self {
         Self {
             entries: vec![],
             _b: PhantomData,
-            _m: PhantomData,
+            _t: PhantomData,
         }
     }
 
@@ -25,7 +25,7 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, M> Node<K, V,
         Self {
             entries,
             _b: PhantomData,
-            _m: PhantomData,
+            _t: PhantomData,
         }
     }
 
@@ -64,6 +64,20 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, M> Node<K, V,
         handle.write(self.to_mem().to_vec(), offset)
     }
 
+    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
+        async_block! {
+            let offset = *fso;
+            let len = await!(self.async_write_at(handle.clone(), offset))?;
+            *fso += len;
+            let op = ObjectPointer {
+                offset,
+                len,
+                object_type: T::OTYPE
+            };
+            Ok(op)
+        }
+    }
+
 }
 
 impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B, Leaf> {
@@ -97,38 +111,6 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B,
                 self.entries.insert(i, entry);
                 None
             },
-        }
-    }
-}
-
-impl LeafNode {
-    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
-        async_block! {
-            let offset = *fso;
-            let len = await!(self.async_write_at(handle.clone(), offset))?;
-            *fso += len;
-            let op = ObjectPointer {
-                offset,
-                len,
-                object_type: ObjectType::LeafNode 
-            };
-            Ok(op)
-        }
-    }
-}
-
-impl InternalNode {
-    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
-        async_block! {
-            let offset = *fso;
-            let len = await!(self.async_write_at(handle.clone(), offset))?;
-            *fso += len;
-            let op = ObjectPointer {
-                offset,
-                len,
-                object_type: ObjectType::InternalNode 
-            };
-            Ok(op)
         }
     }
 }

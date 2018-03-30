@@ -74,13 +74,21 @@ impl ConstUsize for ConstUsize3 {
     const USIZE: usize = 3;
 }
 
-// Marker types
+pub trait ConstObjectType {
+    const OTYPE: ObjectType;
+}
 
 #[derive(Debug)]
 pub struct Leaf;
+impl ConstObjectType for Leaf {
+    const OTYPE: ObjectType = ObjectType::LeafNode;
+}
 
 #[derive(Debug)]
 pub struct Internal;
+impl ConstObjectType for Internal {
+    const OTYPE: ObjectType = ObjectType::InternalNode;
+}
 
 // generic btree types
 
@@ -91,10 +99,10 @@ pub struct NodeEntry<K: Serializable + Ord + Copy, V: Serializable> {
 }
 
 #[derive(Debug)]
-pub struct Node<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, M> {
+pub struct Node<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, T: ConstObjectType> {
     entries: Vec<NodeEntry<K, V>>,
     _b: PhantomData<B>,
-    _m: PhantomData<M>,
+    _t: PhantomData<T>,
 }
 
 // concrete btree types
