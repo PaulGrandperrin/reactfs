@@ -46,17 +46,17 @@ impl<K: Serializable, V: Serializable, B: ConstUsize> Node<K, V, B> {
             value.to_bytes(bytes);
         }
     }
-}
 
-impl LeafNode {
     pub fn to_mem(&self) -> Box<[u8]> {
-        let size = self.entries.len()*(8*2);
+        let size = self.entries.len()*(K::SIZE + V::SIZE);
         let mut mem = Vec::with_capacity(size);
         unsafe{mem.set_len(size)};
         self.to_bytes(&mut Cursor::new(&mut mem));
         return mem.into_boxed_slice();
     }
+}
 
+impl LeafNode {
     pub fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
             handle.write(self.to_mem().to_vec(), offset)
     }
@@ -96,14 +96,6 @@ impl LeafNode {
 }
 
 impl InternalNode {
-    pub fn to_mem(&self) -> Box<[u8]> {
-        let size = self.entries.len()*(8 + (8 + 8 + 1));
-        let mut mem = Vec::with_capacity(size);
-        unsafe{mem.set_len(size)};
-        self.to_bytes(&mut Cursor::new(&mut mem));
-        return mem.into_boxed_slice();
-    }
-
     fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
         handle.write(self.to_mem().to_vec(), offset)
     }
