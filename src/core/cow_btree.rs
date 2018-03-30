@@ -3,13 +3,13 @@ use std::u64;
 use super::*;
 use super::util::*;
 
-impl<K, V> NodeEntry<K, V> {
+impl<K: Serializable, V: Serializable> NodeEntry<K, V> {
     fn new(key: K, value: V) -> Self {
         Self {key, value}
     }
 }
 
-impl<K, V, B: ConstUsize> Node<K, V, B> {
+impl<K: Serializable, V: Serializable, B: ConstUsize> Node<K, V, B> {
     pub fn new() -> Self {
         Self {
             entries: vec![],
@@ -23,25 +23,25 @@ impl<K, V, B: ConstUsize> Node<K, V, B> {
             b: PhantomData,
         }
     }
-}
 
-impl LeafNode {
-    pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<LeafNode, failure::Error> {
+    pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error> {
         let mut entries = vec![];
 
-        while bytes.remaining() >= 8 + 8 {
-            let key = bytes.get_u64::<LittleEndian>();
-            let value = bytes.get_u64::<LittleEndian>();
-            entries.push(LeafNodeEntry{key, value});
+        while bytes.remaining() >= K::SIZE + V::SIZE {
+            let key = K::from_bytes(bytes)?;
+            let value = V::from_bytes(bytes)?;
+            entries.push(NodeEntry{key, value});
         }
 
         debug_assert!(bytes.remaining() == 0);
 
         Ok(
-            LeafNode::with_entries(entries)
+            Self::with_entries(entries)
         )
     }
+}
 
+impl LeafNode {
     pub fn to_mem(&self) -> Box<[u8]> {
         let size = self.entries.len()*(8*2);
         let mut mem = Vec::with_capacity(size);
@@ -98,22 +98,6 @@ impl LeafNode {
 }
 
 impl InternalNode {
-    pub fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<InternalNode, failure::Error> {
-        let mut entries = vec![];
-
-        while bytes.remaining() >= 8 + (8 + 8 + 1) {
-            let key = bytes.get_u64::<LittleEndian>();
-            let object_pointer = ObjectPointer::from_bytes(bytes)?;
-            entries.push(InternalNodeEntry{key, value: object_pointer});
-        }
-
-        debug_assert!(bytes.remaining() == 0);
-
-        Ok(
-            InternalNode::with_entries(entries)
-        )
-    }
-
     pub fn to_mem(&self) -> Box<[u8]> {
         let size = self.entries.len()*(8 + (8 + 8 + 1));
         let mut mem = Vec::with_capacity(size);
