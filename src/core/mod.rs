@@ -85,13 +85,13 @@ pub struct Internal;
 // generic btree types
 
 #[derive(Debug)]
-pub struct NodeEntry<K: Serializable + Ord, V: Serializable> {
+pub struct NodeEntry<K: Serializable + Ord + Copy, V: Serializable> {
     key: K,
     value: V,
 }
 
 #[derive(Debug)]
-pub struct Node<K: Serializable + Ord, V: Serializable, B: ConstUsize, M> {
+pub struct Node<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, M> {
     entries: Vec<NodeEntry<K, V>>,
     _b: PhantomData<B>,
     _m: PhantomData<M>,

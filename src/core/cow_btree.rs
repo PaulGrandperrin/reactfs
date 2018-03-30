@@ -3,7 +3,7 @@ use std::u64;
 use super::*;
 use super::util::*;
 
-impl<K: Serializable + Ord, V: Serializable> NodeEntry<K, V> {
+impl<K: Serializable + Ord + Copy, V: Serializable> NodeEntry<K, V> {
     pub fn new(key: K, value: V) -> Self {
         Self {
             key,
@@ -12,7 +12,7 @@ impl<K: Serializable + Ord, V: Serializable> NodeEntry<K, V> {
     }
 }
 
-impl<K: Serializable + Ord, V: Serializable, B: ConstUsize, M> Node<K, V, B, M> {
+impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, M> Node<K, V, B, M> {
     pub fn new() -> Self {
         Self {
             entries: vec![],
