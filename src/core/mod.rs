@@ -1,6 +1,7 @@
 use std::mem;
 use std::fmt;
 use std::io::Write;
+use std::marker::PhantomData;
 
 use failure;
 use futures::future;
@@ -55,6 +56,26 @@ pub struct ObjectPointer {
     // checksum
 }
 
+// poor man's const generic
+
+pub trait ConstUsize {
+    const USIZE: usize;
+}
+
+#[derive(Debug)]
+pub struct ConstUsize2;
+impl ConstUsize for ConstUsize2 {
+    const USIZE: usize = 2;
+}
+
+#[derive(Debug)]
+pub struct ConstUsize3;
+impl ConstUsize for ConstUsize3 {
+    const USIZE: usize = 3;
+}
+
+// generic btree types
+
 #[derive(Debug)]
 pub struct NodeEntry<K, V> {
     key: K,
@@ -62,12 +83,15 @@ pub struct NodeEntry<K, V> {
 }
 
 #[derive(Debug)]
-pub struct Node<T> {
-    entries: Vec<T>,
+pub struct Node<E, B: ConstUsize> {
+    entries: Vec<E>,
+    b: PhantomData<B>,
 }
+
+// concrete btree types
 
 pub type LeafNodeEntry = NodeEntry<u64, u64>;
 pub type InternalNodeEntry = NodeEntry<u64, ObjectPointer>;
 
-pub type InternalNode = Node<InternalNodeEntry>;
-pub type LeafNode = Node<LeafNodeEntry>;
+pub type InternalNode = Node<InternalNodeEntry, ConstUsize2>;
+pub type LeafNode = Node<LeafNodeEntry, ConstUsize2>;

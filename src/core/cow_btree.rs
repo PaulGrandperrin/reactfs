@@ -9,10 +9,18 @@ impl<K, V> NodeEntry<K, V> {
     }
 }
 
-impl<T> Node<T> {
+impl<E, B: ConstUsize> Node<E, B> {
     pub fn new() -> Self {
         Self {
             entries: vec![],
+            b: PhantomData,
+        }
+    }
+
+    pub fn with_entries(entries: Vec<E>) -> Self {
+        Self {
+            entries,
+            b: PhantomData,
         }
     }
 }
@@ -30,9 +38,7 @@ impl LeafNode {
         debug_assert!(bytes.remaining() == 0);
 
         Ok(
-            LeafNode {
-                entries
-            }
+            LeafNode::with_entries(entries)
         )
     }
 
@@ -104,9 +110,7 @@ impl InternalNode {
         debug_assert!(bytes.remaining() == 0);
 
         Ok(
-            InternalNode {
-                entries
-            }
+            InternalNode::with_entries(entries)
         )
     }
 
@@ -282,9 +286,7 @@ fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64,
     let mut left_node = node;
     // ... and split off its right half to right_node
     let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
-    let mut right_node = LeafNode {
-        entries: right_entries
-    };
+    let mut right_node = LeafNode::with_entries(right_entries);
 
     // insert entry in either node
     let (left_entry, right_entry, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
@@ -312,9 +314,7 @@ fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offs
     let mut left_node = node;
     // ... and split off its right half to right_node
     let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
-    let mut right_node = InternalNode {
-        entries: right_entries
-    };
+    let mut right_node = InternalNode::with_entries(right_entries);
 
     // insert entry in either node
     let (left_entry, right_entry, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
