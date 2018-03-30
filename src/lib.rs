@@ -39,3 +39,5 @@ pub mod reactor;
 pub mod backend;
 pub mod core;
 
+// we use by default the Error implementation from failure's crate
+pub type Result<T> = std::result::Result<T, failure::Error>;

@@ -56,6 +56,13 @@ pub struct ObjectPointer {
     // checksum
 }
 
+// serialization trait
+
+pub trait Serializable: Sized {
+    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>);
+    fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error>;
+}
+
 // poor man's const generic
 
 pub trait ConstUsize {
@@ -83,8 +90,8 @@ pub struct NodeEntry<K, V> {
 }
 
 #[derive(Debug)]
-pub struct Node<E, B: ConstUsize> {
-    entries: Vec<E>,
+pub struct Node<K, V, B: ConstUsize> {
+    entries: Vec<NodeEntry<K, V>>,
     b: PhantomData<B>,
 }
 
@@ -93,5 +100,25 @@ pub struct Node<E, B: ConstUsize> {
 pub type LeafNodeEntry = NodeEntry<u64, u64>;
 pub type InternalNodeEntry = NodeEntry<u64, ObjectPointer>;
 
-pub type InternalNode = Node<InternalNodeEntry, ConstUsize2>;
-pub type LeafNode = Node<LeafNodeEntry, ConstUsize2>;
+pub type LeafNode = Node<u64, u64, ConstUsize2>;
+pub type InternalNode = Node<u64, ObjectPointer, ConstUsize2>;
+
+// Serializable implementations
+
+impl Serializable for u64 {
+    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
+        unimplemented!()
+    }
+    fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error> {
+        unimplemented!()
+    }
+}
+
+impl Serializable for ObjectPointer {
+    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
+        unimplemented!()
+    }
+    fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error> {
+        unimplemented!()
+    }
+}

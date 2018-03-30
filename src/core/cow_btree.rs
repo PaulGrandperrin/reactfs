@@ -9,7 +9,7 @@ impl<K, V> NodeEntry<K, V> {
     }
 }
 
-impl<E, B: ConstUsize> Node<E, B> {
+impl<K, V, B: ConstUsize> Node<K, V, B> {
     pub fn new() -> Self {
         Self {
             entries: vec![],
@@ -17,7 +17,7 @@ impl<E, B: ConstUsize> Node<E, B> {
         }
     }
 
-    pub fn with_entries(entries: Vec<E>) -> Self {
+    pub fn with_entries(entries: Vec<NodeEntry<K, V>>) -> Self {
         Self {
             entries,
             b: PhantomData,

@@ -117,7 +117,7 @@ fn read_u64(h: &Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Err
 }
 
 #[async(boxed)]
-fn write_fibonacci_rec(h:Handle, n: u64) -> Result<(), failure::Error> {
+fn write_fibonacci_rec(h:Handle, n: u64) -> Result<()> {
     match n {
         0|1 => {
             let f = Future::join(
@@ -140,7 +140,7 @@ fn write_fibonacci_rec(h:Handle, n: u64) -> Result<(), failure::Error> {
 }
 
 #[async]
-fn write_fibonacci_seq(h:Handle, n: u64) -> Result<(), failure::Error> {
+fn write_fibonacci_seq(h:Handle, n: u64) -> Result<()> {
     let f = Future::join(
         write_u64(&h, 0, 0),
         write_u64(&h, 1, 1)
@@ -159,6 +159,6 @@ fn write_fibonacci_seq(h:Handle, n: u64) -> Result<(), failure::Error> {
 }
 
 #[async]
-fn read_error(h:Handle) -> Result<u64, failure::Error> {
+fn read_error(h:Handle) -> Result<u64> {
     await!(read_u64(&h, 1000000000))
 }
