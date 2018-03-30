@@ -56,13 +56,6 @@ pub struct ObjectPointer {
     // checksum
 }
 
-// serialization trait
-
-pub trait Serializable: Sized {
-    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>);
-    fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error>;
-}
-
 // poor man's const generic
 
 pub trait ConstUsize {
@@ -84,13 +77,13 @@ impl ConstUsize for ConstUsize3 {
 // generic btree types
 
 #[derive(Debug)]
-pub struct NodeEntry<K, V> {
+pub struct NodeEntry<K: Serializable, V: Serializable> {
     key: K,
     value: V
 }
 
 #[derive(Debug)]
-pub struct Node<K, V, B: ConstUsize> {
+pub struct Node<K: Serializable, V: Serializable, B: ConstUsize> {
     entries: Vec<NodeEntry<K, V>>,
     b: PhantomData<B>,
 }
@@ -103,22 +96,33 @@ pub type InternalNodeEntry = NodeEntry<u64, ObjectPointer>;
 pub type LeafNode = Node<u64, u64, ConstUsize2>;
 pub type InternalNode = Node<u64, ObjectPointer, ConstUsize2>;
 
-// Serializable implementations
+// serialization trait
+
+pub trait Serializable: Sized {
+    const SIZE: usize;
+
+    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>);
+    fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error>;
+}
 
 impl Serializable for u64 {
+    const SIZE: usize = 8;
+
     fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
-        unimplemented!()
+        bytes.put_u64::<LittleEndian>(*self);
     }
     fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error> {
-        unimplemented!()
+        Ok(bytes.get_u64::<LittleEndian>())
     }
 }
 
 impl Serializable for ObjectPointer {
+    const SIZE: usize = (8 + 8 + 1);
+
     fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
-        unimplemented!()
+        self.to_bytes(bytes);
     }
     fn from_bytes(bytes: &mut Cursor<&[u8]>) -> Result<Self, failure::Error> {
-        unimplemented!()
+        ObjectPointer::from_bytes(bytes)
     }
 }
