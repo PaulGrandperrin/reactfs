@@ -54,15 +54,13 @@ impl<K: Serializable, V: Serializable, B: ConstUsize> Node<K, V, B> {
         self.to_bytes(&mut Cursor::new(&mut mem));
         return mem.into_boxed_slice();
     }
+
+    pub fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
+        handle.write(self.to_mem().to_vec(), offset)
+    }
 }
 
 impl LeafNode {
-    pub fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
-            handle.write(self.to_mem().to_vec(), offset)
-    }
-
-    // --
-
     fn insert(&mut self, mut entry: LeafNodeEntry) -> Option<u64> {
         // algo invariant: the entries should be sorted
         debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
@@ -96,12 +94,6 @@ impl LeafNode {
 }
 
 impl InternalNode {
-    fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
-        handle.write(self.to_mem().to_vec(), offset)
-    }
-
-    // --
-
     fn insert(&mut self, entry: InternalNodeEntry) -> Option<ObjectPointer> {
         // algo invariant: the entries should be sorted
         debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
