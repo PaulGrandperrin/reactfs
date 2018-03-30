@@ -74,18 +74,27 @@ impl ConstUsize for ConstUsize3 {
     const USIZE: usize = 3;
 }
 
+// Marker types
+
+#[derive(Debug)]
+pub struct Leaf;
+
+#[derive(Debug)]
+pub struct Internal;
+
 // generic btree types
 
 #[derive(Debug)]
 pub struct NodeEntry<K: Serializable + Ord, V: Serializable> {
     key: K,
-    value: V
+    value: V,
 }
 
 #[derive(Debug)]
-pub struct Node<K: Serializable + Ord, V: Serializable, B: ConstUsize> {
+pub struct Node<K: Serializable + Ord, V: Serializable, B: ConstUsize, M> {
     entries: Vec<NodeEntry<K, V>>,
-    b: PhantomData<B>,
+    _b: PhantomData<B>,
+    _m: PhantomData<M>,
 }
 
 // concrete btree types
@@ -93,8 +102,8 @@ pub struct Node<K: Serializable + Ord, V: Serializable, B: ConstUsize> {
 pub type LeafNodeEntry = NodeEntry<u64, u64>;
 pub type InternalNodeEntry = NodeEntry<u64, ObjectPointer>;
 
-pub type LeafNode = Node<u64, u64, ConstUsize2>;
-pub type InternalNode = Node<u64, ObjectPointer, ConstUsize2>;
+pub type LeafNode = Node<u64, u64, ConstUsize2, Leaf>;
+pub type InternalNode = Node<u64, ObjectPointer, ConstUsize2, Internal>;
 
 // serialization trait
 

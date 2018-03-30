@@ -121,7 +121,7 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
                 handle.clone(),
                 op.clone(),
                 free_space_offset,
-                LeafNodeEntry{key: vec[i].0 as u64, value: vec[i].1 as u64}
+                LeafNodeEntry::new(vec[i].0 as u64, vec[i].1 as u64)
                 ))?;
             op = res.0;
             free_space_offset = res.1;
@@ -155,7 +155,7 @@ fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operat
                         handle.clone(),
                         op.clone(),
                         free_space_offset,
-                        LeafNodeEntry{key: *k, value: *v}
+                        LeafNodeEntry::new(*k, *v)
                         ))?;
                     op = res.0;
                     free_space_offset = res.1;

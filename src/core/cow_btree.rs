@@ -4,23 +4,28 @@ use super::*;
 use super::util::*;
 
 impl<K: Serializable + Ord, V: Serializable> NodeEntry<K, V> {
-    fn new(key: K, value: V) -> Self {
-        Self {key, value}
+    pub fn new(key: K, value: V) -> Self {
+        Self {
+            key,
+            value,
+        }
     }
 }
 
-impl<K: Serializable + Ord, V: Serializable, B: ConstUsize> Node<K, V, B> {
+impl<K: Serializable + Ord, V: Serializable, B: ConstUsize, M> Node<K, V, B, M> {
     pub fn new() -> Self {
         Self {
             entries: vec![],
-            b: PhantomData,
+            _b: PhantomData,
+            _m: PhantomData,
         }
     }
 
     pub fn with_entries(entries: Vec<NodeEntry<K, V>>) -> Self {
         Self {
             entries,
-            b: PhantomData,
+            _b: PhantomData,
+            _m: PhantomData,
         }
     }
 
@@ -30,7 +35,7 @@ impl<K: Serializable + Ord, V: Serializable, B: ConstUsize> Node<K, V, B> {
         while bytes.remaining() >= K::SIZE + V::SIZE {
             let key = K::from_bytes(bytes)?;
             let value = V::from_bytes(bytes)?;
-            entries.push(NodeEntry{key, value});
+            entries.push(NodeEntry::new(key, value));
         }
 
         debug_assert!(bytes.remaining() == 0);
