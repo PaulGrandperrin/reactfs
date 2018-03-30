@@ -66,8 +66,8 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, M> Node<K, V,
 
 }
 
-impl LeafNode {
-    fn insert(&mut self, mut entry: LeafNodeEntry) -> Option<u64> {
+impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B, Leaf> {
+    fn insert(&mut self, mut entry: NodeEntry<K, V>) -> Option<V> {
         // algo invariant: the entries should be sorted
         debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
 
@@ -83,7 +83,25 @@ impl LeafNode {
             },
         }
     }
+}
 
+impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B, Internal> {
+    fn insert(&mut self, mut entry: NodeEntry<K, V>) -> Option<V> {
+        // algo invariant: the entries should be sorted
+        debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
+
+        let res = self.entries.binary_search_by_key(&entry.key, |e| e.key);
+        match res {
+            Ok(i)  => unreachable!("cow_btree: trying to insert in an InternalNode but key already exists"),
+            Err(i) => {
+                self.entries.insert(i, entry);
+                None
+            },
+        }
+    }
+}
+
+impl LeafNode {
     fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
         async_block! {
             let offset = *fso;
@@ -100,20 +118,6 @@ impl LeafNode {
 }
 
 impl InternalNode {
-    fn insert(&mut self, entry: InternalNodeEntry) -> Option<ObjectPointer> {
-        // algo invariant: the entries should be sorted
-        debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
-
-        let res = self.entries.binary_search_by_key(&entry.key, |e| e.key);
-        match res {
-            Ok(i)  => unreachable!("cow_btree: trying to insert in an InternalNode but key already exists"),
-            Err(i) => {
-                self.entries.insert(i, entry);
-                None
-            },
-        }
-    }
-
     fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
         async_block! {
             let offset = *fso;
