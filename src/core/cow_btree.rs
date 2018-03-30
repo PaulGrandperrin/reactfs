@@ -35,9 +35,16 @@ impl<K: Serializable, V: Serializable, B: ConstUsize> Node<K, V, B> {
 
         debug_assert!(bytes.remaining() == 0);
 
-        Ok(
-            Self::with_entries(entries)
-        )
+        Ok(Self::with_entries(entries))
+    }
+
+    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
+        debug_assert!(bytes.remaining_mut() >= self.entries.len() * (K::SIZE + V::SIZE));
+
+        for NodeEntry{key, value} in &self.entries {
+            key.to_bytes(bytes);
+            value.to_bytes(bytes);
+        }
     }
 }
 
@@ -48,15 +55,6 @@ impl LeafNode {
         unsafe{mem.set_len(size)};
         self.to_bytes(&mut Cursor::new(&mut mem));
         return mem.into_boxed_slice();
-    }
-
-    pub fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
-        debug_assert!(bytes.remaining_mut() >= self.entries.len() * (8 + 8));
-
-        for LeafNodeEntry{key, value} in &self.entries {
-            bytes.put_u64::<LittleEndian>(*key);
-            bytes.put_u64::<LittleEndian>(*value);
-        }
     }
 
     pub fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
@@ -104,15 +102,6 @@ impl InternalNode {
         unsafe{mem.set_len(size)};
         self.to_bytes(&mut Cursor::new(&mut mem));
         return mem.into_boxed_slice();
-    }
-
-    fn to_bytes(&self, bytes: &mut Cursor<&mut [u8]>) {
-        debug_assert!(bytes.remaining_mut() >= self.entries.len() * (8 + (8 + 8 + 1)));
-
-        for InternalNodeEntry{key, value: object_pointer} in &self.entries {
-            bytes.put_u64::<LittleEndian>(*key);
-            object_pointer.to_bytes(bytes);
-        }
     }
 
     fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
