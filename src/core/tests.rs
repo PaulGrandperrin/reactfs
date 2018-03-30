@@ -1,6 +1,7 @@
 use futures::prelude::*;
 use std::thread;
 use std::sync::mpsc::channel;
+use test::Bencher;
 
 use ::backend::mem::*;
 
@@ -34,6 +35,15 @@ fn cow_btree_random() {
     run_in_reactor_on_mem_backend(|handle| {
         Box::new(cow_btree_random_async(handle.clone()))
     }).unwrap();
+}
+
+#[bench]
+fn cow_btree_random_bench(b: &mut Bencher) {
+    b.iter(|| {
+        run_in_reactor_on_mem_backend(|handle| {
+            Box::new(cow_btree_random_async(handle.clone()))
+        }).unwrap();
+    })
 }
 
 #[async]

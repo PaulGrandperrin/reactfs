@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 #![feature(entry_and_modify, proc_macro, generators, generator_trait, nll, match_default_bindings,collection_placement,placement_in_syntax)]
-#![cfg_attr(test, feature(plugin))]
+#![cfg_attr(test, feature(plugin, test))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
 extern crate futures_await as futures;
@@ -20,6 +20,9 @@ extern crate proptest;
 
 #[macro_use]
 extern crate fuzztest;
+
+#[cfg(test)]
+extern crate test;
 
 use std::thread;
 use std::sync::mpsc::channel;
