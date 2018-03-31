@@ -15,6 +15,19 @@ pub enum Operation {
     Remove(u64)
 }
 
+trait Interface {
+    type TestReturn = Future<Item=(), Error=failure::Error>;
+    fn test() -> Self::TestReturn;
+}
+
+struct Foo;
+
+impl Interface for Foo {
+    fn test() -> Self::TestReturn {
+        unimplemented!()
+    }
+}
+
 pub fn insert_checked(vec: Vec<(u64, u64)>) {
     // insert the data in the cow btree
     let cow_btree = run_in_reactor_on_mem_backend(|handle| {
