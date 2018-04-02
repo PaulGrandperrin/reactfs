@@ -56,6 +56,16 @@ pub struct ObjectPointer {
     // checksum
 }
 
+// traits
+
+trait Index {
+
+}
+
+trait NodeTrait<K: Serializable + Ord + Copy, V: Serializable> {
+    fn insert(&mut self, entry: NodeEntry<K, V>) -> Option<V>;
+}
+
 // poor man's const generic
 
 pub trait ConstUsize {

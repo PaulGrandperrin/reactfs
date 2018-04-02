@@ -80,7 +80,7 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, T: ConstObjec
 
 }
 
-impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B, Leaf> {
+impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> NodeTrait<K, V> for Node<K, V, B, Leaf> {
     fn insert(&mut self, mut entry: NodeEntry<K, V>) -> Option<V> {
         // algo invariant: the entries should be sorted
         debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
@@ -99,7 +99,7 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B,
     }
 }
 
-impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B, Internal> {
+impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> NodeTrait<K, V> for Node<K, V, B, Internal> {
     fn insert(&mut self, mut entry: NodeEntry<K, V>) -> Option<V> {
         // algo invariant: the entries should be sorted
         debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
