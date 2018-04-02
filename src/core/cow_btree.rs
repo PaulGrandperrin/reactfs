@@ -64,11 +64,11 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, T: ConstObjec
         Box::new(handle.write(self.to_mem().to_vec(), offset))
     }
 
-    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> Box<Future<Item=ObjectPointer, Error=failure::Error> + 'f> { // box not really needed
+    fn cow<'f>(&'f self, handle: Handle, fso: *mut u64) -> Box<Future<Item=ObjectPointer, Error=failure::Error> + 'f> { // box not really needed
         Box::new(async_block! {
-            let offset = *fso;
+            let offset = unsafe{*fso};
             let len = await!(self.async_write_at(handle.clone(), offset))?;
-            *fso += len;
+            unsafe{*fso += len};
             let op = ObjectPointer {
                 offset,
                 len,
