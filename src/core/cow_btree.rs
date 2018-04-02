@@ -60,12 +60,12 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, T: ConstObjec
         return mem.into_boxed_slice();
     }
 
-    pub fn async_write_at(&self, handle: Handle, offset: u64) -> impl Future<Item=u64, Error=failure::Error> {
-        handle.write(self.to_mem().to_vec(), offset)
+    pub fn async_write_at(&self, handle: Handle, offset: u64) -> Box<Future<Item=u64, Error=failure::Error>> { // box not really needed
+        Box::new(handle.write(self.to_mem().to_vec(), offset))
     }
 
-    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> impl Future<Item=ObjectPointer, Error=failure::Error> + 'f {
-        async_block! {
+    fn cow<'f>(&'f self, handle: Handle, fso: &'f mut u64) -> Box<Future<Item=ObjectPointer, Error=failure::Error> + 'f> { // box not really needed
+        Box::new(async_block! {
             let offset = *fso;
             let len = await!(self.async_write_at(handle.clone(), offset))?;
             *fso += len;
@@ -75,7 +75,7 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, T: ConstObjec
                 object_type: T::OTYPE
             };
             Ok(op)
-        }
+        })
     }
 
 }
@@ -116,7 +116,7 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> Node<K, V, B,
 }
 
 /// insert or go in entry then split 
-#[async]
+#[async(boxed)]  // box not really needed
 fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, u64, Option<u64>), failure::Error> {
     // algo invariant: the entries should be sorted
     debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
@@ -229,7 +229,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
     }
 }
 
-#[async]
+#[async(boxed)] // box not really needed
 fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, InternalNodeEntry, u64, Option<u64>), failure::Error> {
     // rename node to left_node ...
     let mut left_node = node;
@@ -257,7 +257,7 @@ fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64,
     Ok((left_entry, right_entry, free_space_offset, old_value))
 }
 
-#[async]
+#[async(boxed)] // box not really needed
 fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, InternalNodeEntry, u64, Option<u64>), failure::Error> {
     // rename node to left_node ...
     let mut left_node = node;
@@ -285,7 +285,7 @@ fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offs
     Ok((left_entry, right_entry, free_space_offset, old_value))
 }
 
-#[async]
+#[async(boxed)] // box not really needed
 pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
     // read pointed object
     let any_object = await!(op.async_read_object(handle.clone()))?;
@@ -341,7 +341,7 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
     Ok((op, new_free_space_offset, old_value))
 }
 
-#[async]
+#[async(boxed)] // box not really needed
 pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, failure::Error> {
     // read root node
     let any_object = await!(op.async_read_object(handle.clone()))?;
@@ -380,7 +380,7 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
     }
 }
 
-#[async]
+#[async(boxed)] // box not really needed
 fn remove_in_leaf(handle: Handle, node: LeafNode, free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
     /*
         Here, we have the following garanties:
@@ -687,7 +687,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
 
 
 // TODO: write a version that does not do any modifications if the entry to remove doesn't exist
-#[async]
+#[async(boxed)] // box not really needed
 pub fn remove(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
     /*
         Here, we have the following garanties:
