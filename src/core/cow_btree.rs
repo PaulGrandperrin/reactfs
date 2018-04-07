@@ -117,7 +117,9 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> NodeTrait<K, 
 
 /// insert or go in entry then split 
 #[async(boxed)]  // box not really needed
-fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, u64, Option<u64>), failure::Error> {
+fn insert_in_leaf_node<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>(handle: Handle, node: Node<K, V, B, Leaf>, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
+-> Result<(NodeEntry<K, ObjectPointer>, u64, Option<V>), failure::Error> {
+    
     // algo invariant: the entries should be sorted
     debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
 
@@ -126,7 +128,7 @@ fn insert_in_leaf_node(handle: Handle, node: LeafNode, free_space_offset: u64, e
     // COW node
     let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
 
-    let entry = InternalNodeEntry::new(node.entries[0].key, op);
+    let entry = NodeEntry::<K, ObjectPointer>::new(node.entries[0].key, op);
 
     Ok((entry, free_space_offset, old_value))
 }
