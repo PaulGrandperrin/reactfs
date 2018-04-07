@@ -159,8 +159,8 @@ fn insert_in_internal_node<K: Serializable + Ord + Copy + 'static, V: Serializab
     match any_object {
         AnyObject::LeafNode(child_node) => {
             // algo invariant
-            debug_assert!(child_node.entries.len() >= BTREE_B && child_node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
-            let old_value = if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
+            debug_assert!(child_node.entries.len() >= B::USIZE && child_node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
+            let old_value = if child_node.entries.len() < btree_degree(B::USIZE) { // pro-active splitting if the node has the maximum size
                 let (child_entry, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
@@ -196,9 +196,9 @@ fn insert_in_internal_node<K: Serializable + Ord + Copy + 'static, V: Serializab
         }
         AnyObject::InternalNode(child_node) => {
             // algo invariant
-            debug_assert!(child_node.entries.len() >= BTREE_B && child_node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(child_node.entries.len() >= B::USIZE && child_node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
-            let old_value = if child_node.entries.len() < BTREE_DEGREE { // pro-active splitting if the node has the maximum size
+            let old_value = if child_node.entries.len() < btree_degree(B::USIZE) { // pro-active splitting if the node has the maximum size
                 let (child_entry, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
@@ -242,7 +242,7 @@ fn leaf_split_and_insert<K: Serializable + Ord + Copy + 'static, V: Serializable
     // rename node to left_node ...
     let mut left_node = node;
     // ... and split off its right half to right_node
-    let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
+    let right_entries = left_node.entries.split_off(btree_split(B::USIZE)); // split at b+1
     let mut right_node = Node::<K, V, B, Leaf>::with_entries(right_entries);
 
     // insert entry in either node
@@ -272,7 +272,7 @@ fn internal_split_and_insert<K: Serializable + Ord + Copy + 'static, V: Serializ
     // rename node to left_node ...
     let mut left_node = node;
     // ... and split off its right half to right_node
-    let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
+    let right_entries = left_node.entries.split_off(btree_split(B::USIZE)); // split at b+1
     let mut right_node = Node::<K, ObjectPointer, B, Internal>::with_entries(right_entries);
 
     // insert entry in either node
@@ -296,22 +296,24 @@ fn internal_split_and_insert<K: Serializable + Ord + Copy + 'static, V: Serializ
 }
 
 #[async(boxed)] // box not really needed
-pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+pub fn insert_in_btree<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>
+(handle: Handle, op: ObjectPointer, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
+-> Result<(ObjectPointer, u64, Option<V>), failure::Error> {
     // read pointed object
-    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<K, V, B>(handle.clone()))?;
 
     let (op, new_free_space_offset, old_value) = match any_object {
         AnyObject::LeafNode(node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
-            if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
+            if node.entries.len() >= btree_degree(B::USIZE) { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
                 let (left_entry, right_entry, new_free_space_offset, old_value) = await!(leaf_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
                 // create new root
-                let mut new_root = InternalNode::new();
+                let mut new_root = Node::<K, ObjectPointer, B, Internal>::new();
                 new_root.entries.push(left_entry);
                 new_root.entries.push(right_entry);
                 // no need to sort
@@ -326,15 +328,15 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
         }
         AnyObject::InternalNode(node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
-            if node.entries.len() >= BTREE_DEGREE { // pro-active splitting if the node has the maximum size
+            if node.entries.len() >= btree_degree(B::USIZE) { // pro-active splitting if the node has the maximum size
                 // split the node and insert in relevant child
                 let (left_entry, right_entry, new_free_space_offset, old_value) = await!(internal_split_and_insert(handle.clone(), *node, free_space_offset, entry_to_insert))?;
                 free_space_offset = new_free_space_offset;
 
                 // create new root
-                let mut new_root = InternalNode::new();
+                let mut new_root = Node::<K, ObjectPointer, B, Internal>::new();
                 new_root.entries.push(left_entry);
                 new_root.entries.push(right_entry);
                 // no need to sort
@@ -359,7 +361,7 @@ pub fn get<K: Serializable + Ord + Copy + 'static, V: Serializable + Copy, B: Co
     match any_object {
         AnyObject::LeafNode(node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
             // algo invariant: the entries should be sorted
             debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
@@ -373,7 +375,7 @@ pub fn get<K: Serializable + Ord + Copy + 'static, V: Serializable + Copy, B: Co
         }
         AnyObject::InternalNode(node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
             // algo invariant: the entries should be sorted
             debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
@@ -447,7 +449,7 @@ fn remove_in_internal<K: Serializable + Ord + Copy + 'static, V: Serializable + 
     match child {
         AnyObject::LeafNode(mut child) => {
             // TODO: add asserts
-            if child.entries.len() <= BTREE_B { // pro-active merging if the node has the minimum size
+            if child.entries.len() <= B::USIZE { // pro-active merging if the node has the minimum size
 
                 let neighbor_index = if index > 0 { // if we have a left neighbor
                     index - 1
@@ -463,7 +465,7 @@ fn remove_in_internal<K: Serializable + Ord + Copy + 'static, V: Serializable + 
                 };
 
                 // TODO: add assert
-                let removed_value = if child.entries.len() + neighbor.entries.len() <= BTREE_DEGREE { // if there is enough space to do a full merge
+                let removed_value = if child.entries.len() + neighbor.entries.len() <= btree_degree(B::USIZE) { // if there is enough space to do a full merge
                     fuzz_marker!("cow_btree_remove_full_merge_leaf");
 
                     // figure out the direction of which node will be merge into which
@@ -529,7 +531,7 @@ fn remove_in_internal<K: Serializable + Ord + Copy + 'static, V: Serializable + 
                     };
 
                     // check that now the child has enough entries to substain one remove, and is not too big
-                    debug_assert!(child.entries.len() >= BTREE_B + 1 && child.entries.len() <= BTREE_DEGREE); // b + 1 <= len <= 2b+1
+                    debug_assert!(child.entries.len() >= B::USIZE + 1 && child.entries.len() <= btree_degree(B::USIZE)); // b + 1 <= len <= 2b+1
 
                     // the entries should still be sorted
                     debug_assert!(is_sorted(child.entries.iter().map(|l|{l.key})));
@@ -572,7 +574,7 @@ fn remove_in_internal<K: Serializable + Ord + Copy + 'static, V: Serializable + 
         }
         AnyObject::InternalNode(mut child) => {
             // TODO: add asserts
-            if child.entries.len() <= BTREE_B { // pro-active merging if the node has the minimum size
+            if child.entries.len() <= B::USIZE { // pro-active merging if the node has the minimum size
 
                 let neighbor_index = if index > 0 { // if we have a left neighbor
                     index - 1
@@ -588,7 +590,7 @@ fn remove_in_internal<K: Serializable + Ord + Copy + 'static, V: Serializable + 
                 };
 
                 // TODO: add assert
-                let removed_value = if child.entries.len() + neighbor.entries.len() <= BTREE_DEGREE { // if there is enough space to do a full merge
+                let removed_value = if child.entries.len() + neighbor.entries.len() <= btree_degree(B::USIZE) { // if there is enough space to do a full merge
                     fuzz_marker!("cow_btree_remove_full_merge_internal");
                     // figure out the direction of which node will be merge into which
                     let (mut src_node, src_index, mut dst_node, dst_index) = match neighbor_index as isize - index as isize {
@@ -653,7 +655,7 @@ fn remove_in_internal<K: Serializable + Ord + Copy + 'static, V: Serializable + 
                     };
 
                     // check that now the child has enough entries to substain one remove, and is not too big
-                    debug_assert!(child.entries.len() >= BTREE_B + 1 && child.entries.len() <= BTREE_DEGREE); // b + 1 <= len <= 2b+1
+                    debug_assert!(child.entries.len() >= B::USIZE + 1 && child.entries.len() <= btree_degree(B::USIZE)); // b + 1 <= len <= 2b+1
 
                     // the entries should still be sorted
                     debug_assert!(is_sorted(child.entries.iter().map(|l|{l.key})));
@@ -741,13 +743,13 @@ pub fn print_btree<K: Serializable + Ord + Copy + Debug, V: Serializable + Debug
     match any_object {
         AnyObject::LeafNode(node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
         }
         AnyObject::InternalNode(node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
             for n in node.entries {
@@ -771,13 +773,13 @@ pub fn read_btree<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize>(
     match any_object {
         AnyObject::LeafNode(mut node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
             v.append(&mut node.entries);
         }
         AnyObject::InternalNode(node) => {
             // algo invariant
-            debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
+            debug_assert!(node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
 
             for n in node.entries {
                 let mut res = await!(read_btree::<K, V, B>(handle.clone(), n.value))?;

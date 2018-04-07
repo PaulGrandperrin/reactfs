@@ -25,9 +25,9 @@ mod tests;
 
 const MAGIC_NUMBER: &[u8] = b"ReactFS0";
 const BLOCK_SIZE: usize = 4096;
-const BTREE_B: usize = 2;
-const BTREE_DEGREE: usize = BTREE_B*2+1;
-const BTREE_SPLIT: usize = BTREE_B+1;
+
+const fn btree_degree(b: usize) -> usize {b * 2 + 1}
+const fn btree_split(b: usize) -> usize {b + 1}
 
 #[derive(Debug)]
 pub struct Uberblock {

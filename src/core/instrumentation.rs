@@ -117,7 +117,7 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
 
         // insert the vector in the btree
         for i in 0..vec.len() {
-            let res = await!(insert_in_btree(
+            let res = await!(insert_in_btree::<u64, u64, ConstUsize2>(
                 handle.clone(),
                 op.clone(),
                 free_space_offset,
@@ -151,7 +151,7 @@ fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operat
             match o {
                 // insert in cow btree
                 Operation::Insert(k, v) => {
-                    let res = await!(insert_in_btree(
+                    let res = await!(insert_in_btree::<u64, u64, ConstUsize2>(
                         handle.clone(),
                         op.clone(),
                         free_space_offset,
