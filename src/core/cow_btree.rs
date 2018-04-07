@@ -1,5 +1,6 @@
 use std::mem;
 use std::u64;
+use std::fmt::Debug;
 use super::*;
 use super::util::*;
 
@@ -728,8 +729,8 @@ pub fn remove(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: u6
 }
 
 #[async(boxed)]
-pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Result<(), failure::Error> {
-    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
+pub fn print_btree<K: Serializable + Ord + Copy + Debug, V: Serializable + Debug, B: ConstUsize>(handle: Handle, op: ObjectPointer, indentation: usize) -> Result<(), failure::Error> {
+    let any_object = await!(op.async_read_object::<K, V, B>(handle.clone()))?;
 
     match any_object {
         AnyObject::LeafNode(node) => {
@@ -744,7 +745,7 @@ pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Res
 
             println!("{} {:?}", "  ".repeat(indentation), node.entries);
             for n in node.entries {
-                await!(print_btree(handle.clone(), n.value, indentation + 1))?;
+                await!(print_btree::<K, V, B>(handle.clone(), n.value, indentation + 1))?;
             }
         }
     }
