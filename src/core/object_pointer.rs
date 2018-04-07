@@ -34,19 +34,19 @@ impl ObjectPointer {
         bytes.put_u8(self.object_type.to_u8().unwrap()); // there is less than 2^8 types
     }
 
-    pub fn async_read_object(&self, handle: Handle) -> impl Future<Item=AnyObject, Error=failure::Error> {
+    pub fn async_read_object<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize>(&self, handle: Handle) -> impl Future<Item=AnyObject<K, V, B>, Error=failure::Error> {
         let object_type = self.object_type.clone();
 
         handle.read(self.offset, self.len).and_then(move |mem|{
             match object_type {
                 ObjectType::LeafNode => {
                     Ok(AnyObject::LeafNode(Box::new(
-                        LeafNode::from_bytes(&mut Cursor::new(&mem))?
+                        Node::<K, V, B, Leaf>::from_bytes(&mut Cursor::new(&mem))?
                     )))
                 }
                 ObjectType::InternalNode => {
                     Ok(AnyObject::InternalNode(Box::new(
-                        InternalNode::from_bytes(&mut Cursor::new(&mem))?
+                        Node::<K, ObjectPointer, B, Internal>::from_bytes(&mut Cursor::new(&mem))?
                     )))
                 }
                 _ => unimplemented!()

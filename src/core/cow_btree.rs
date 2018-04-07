@@ -117,7 +117,8 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> NodeTrait<K, 
 
 /// insert or go in entry then split 
 #[async(boxed)]  // box not really needed
-fn insert_in_leaf_node<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>(handle: Handle, node: Node<K, V, B, Leaf>, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
+fn insert_in_leaf_node<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>
+(handle: Handle, node: Node<K, V, B, Leaf>, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
 -> Result<(NodeEntry<K, ObjectPointer>, u64, Option<V>), failure::Error> {
     
     // algo invariant: the entries should be sorted
@@ -135,7 +136,9 @@ fn insert_in_leaf_node<K: Serializable + Ord + Copy + 'static, V: Serializable +
 
 /// insert or go in entry then split 
 #[async(boxed)]
-fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, u64, Option<u64>), failure::Error> {
+fn insert_in_internal_node<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>
+(handle: Handle, cur_node: Node<K, ObjectPointer, B, Internal>, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
+-> Result<(NodeEntry<K, ObjectPointer>, u64, Option<V>), failure::Error> {
     // algo invariant: the entries should be sorted
     debug_assert!(is_sorted(cur_node.entries.iter().map(|l|{l.key})));
 
@@ -150,7 +153,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
     let op = cur_node.entries[index].value.clone();
     
     // read pointed object
-    let any_object = await!(op.async_read_object(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<K, V, B>(handle.clone()))?;
 
     match any_object {
         AnyObject::LeafNode(child_node) => {
@@ -181,7 +184,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             // COW that new node
             let op = await!(cur_node.cow(handle.clone(), &mut free_space_offset))?;
 
-            let entry = InternalNodeEntry::new(cur_node.entries[0].key, op);
+            let entry = NodeEntry::<K, ObjectPointer>::new(cur_node.entries[0].key, op);
 
             // return
             Ok((
@@ -219,7 +222,7 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
             // COW that new node
             let op = await!(cur_node.cow(handle.clone(), &mut free_space_offset))?;
 
-            let entry = InternalNodeEntry::new(cur_node.entries[0].key, op);
+            let entry = NodeEntry::<K, ObjectPointer>::new(cur_node.entries[0].key, op);
 
             // return
             Ok((
@@ -232,12 +235,14 @@ fn insert_in_internal_node(handle: Handle, cur_node: InternalNode, free_space_of
 }
 
 #[async(boxed)] // box not really needed
-fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, InternalNodeEntry, u64, Option<u64>), failure::Error> {
+fn leaf_split_and_insert<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>
+(handle: Handle, node: Node<K, V, B, Leaf>, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
+-> Result<(NodeEntry<K, ObjectPointer>, NodeEntry<K, ObjectPointer>, u64, Option<V>), failure::Error> {
     // rename node to left_node ...
     let mut left_node = node;
     // ... and split off its right half to right_node
     let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
-    let mut right_node = LeafNode::with_entries(right_entries);
+    let mut right_node = Node::<K, V, B, Leaf>::with_entries(right_entries);
 
     // insert entry in either node
     let (left_entry, right_entry, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
@@ -245,14 +250,14 @@ fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64,
         let (left_entry, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), left_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let right_op = await!(right_node.cow(handle.clone(), &mut free_space_offset))?;
-        let right_entry = InternalNodeEntry::new(right_node.entries[0].key, right_op);
+        let right_entry = NodeEntry::<K, ObjectPointer>::new(right_node.entries[0].key, right_op);
         (left_entry, right_entry, old_value)
     } else {
         // TODO maybe inlining insert_in_internal_node code would be simpler
         let (right_entry, new_free_space_offset, old_value) = await!(insert_in_leaf_node(handle.clone(), right_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let left_op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
-        let left_entry = InternalNodeEntry::new(left_node.entries[0].key, left_op);
+        let left_entry = NodeEntry::<K, ObjectPointer>::new(left_node.entries[0].key, left_op);
         (left_entry, right_entry, old_value)
     };
 
@@ -260,12 +265,14 @@ fn leaf_split_and_insert(handle: Handle, node: LeafNode, free_space_offset: u64,
 }
 
 #[async(boxed)] // box not really needed
-fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(InternalNodeEntry, InternalNodeEntry, u64, Option<u64>), failure::Error> {
+fn internal_split_and_insert<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>
+(handle: Handle, node: Node<K, ObjectPointer, B, Internal>, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
+-> Result<(NodeEntry<K, ObjectPointer>, NodeEntry<K, ObjectPointer>, u64, Option<V>), failure::Error> {
     // rename node to left_node ...
     let mut left_node = node;
     // ... and split off its right half to right_node
     let right_entries = left_node.entries.split_off(BTREE_SPLIT); // split at b+1
-    let mut right_node = InternalNode::with_entries(right_entries);
+    let mut right_node = Node::<K, ObjectPointer, B, Internal>::with_entries(right_entries);
 
     // insert entry in either node
     let (left_entry, right_entry, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
@@ -273,14 +280,14 @@ fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offs
         let (left_entry, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), left_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let right_op = await!(right_node.cow(handle.clone(), &mut free_space_offset))?;
-        let right_entry = InternalNodeEntry::new(right_node.entries[0].key, right_op);
+        let right_entry = NodeEntry::<K, ObjectPointer>::new(right_node.entries[0].key, right_op);
         (left_entry, right_entry, old_value)
     } else {
         // TODO maybe inlining insert_in_internal_node code would be simpler
         let (right_entry, new_free_space_offset, old_value) = await!(insert_in_internal_node(handle.clone(), right_node, free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let left_op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
-        let left_entry = InternalNodeEntry::new(left_node.entries[0].key, left_op);
+        let left_entry = NodeEntry::<K, ObjectPointer>::new(left_node.entries[0].key, left_op);
         (left_entry, right_entry, old_value)
     };
 
@@ -290,7 +297,7 @@ fn internal_split_and_insert(handle: Handle, node: InternalNode, free_space_offs
 #[async(boxed)] // box not really needed
 pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64, entry_to_insert: LeafNodeEntry) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
     // read pointed object
-    let any_object = await!(op.async_read_object(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
 
     let (op, new_free_space_offset, old_value) = match any_object {
         AnyObject::LeafNode(node) => {
@@ -346,7 +353,7 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
 #[async(boxed)] // box not really needed
 pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, failure::Error> {
     // read root node
-    let any_object = await!(op.async_read_object(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
 
     match any_object {
         AnyObject::LeafNode(node) => {
@@ -570,7 +577,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     unreachable!("cow_btree: all node should have at least one neighbor at any time!");
                 };
 
-                let mut neighbor = match await!(node.entries[neighbor_index].value.async_read_object(handle.clone()))? { // TODO: use trait
+                let mut neighbor = match await!(node.entries[neighbor_index].value.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))? { // TODO: use trait
                     AnyObject::InternalNode(n) => *n,
                     AnyObject::LeafNode(_) => unreachable!("cow_btree: all sibling should be of the same kind")
                 };
@@ -722,7 +729,7 @@ pub fn remove(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: u6
 
 #[async(boxed)]
 pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Result<(), failure::Error> {
-    let any_object = await!(op.async_read_object(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
 
     match any_object {
         AnyObject::LeafNode(node) => {
@@ -752,7 +759,7 @@ pub fn print_btree(handle: Handle, op: ObjectPointer, indentation: usize) -> Res
 #[async(boxed)]
 pub fn read_btree(handle: Handle, op: ObjectPointer) -> Result<Vec<LeafNodeEntry>, failure::Error> {
     let mut v = vec![];
-    let any_object = await!(op.async_read_object(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
 
     match any_object {
         AnyObject::LeafNode(mut node) => {

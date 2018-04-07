@@ -43,9 +43,9 @@ pub enum ObjectType {
 }
 
 #[derive(Debug)]
-pub enum AnyObject {
-    LeafNode(Box<LeafNode>),
-    InternalNode(Box<InternalNode>),
+pub enum AnyObject<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> {
+    LeafNode(Box<Node<K, V, B, Leaf>>),
+    InternalNode(Box<Node<K, ObjectPointer, B, Internal>>),
 }
 
 #[derive(Debug, Clone)]
