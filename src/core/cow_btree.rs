@@ -758,9 +758,9 @@ pub fn print_btree<K: Serializable + Ord + Copy + Debug, V: Serializable + Debug
 }
 
 #[async(boxed)]
-pub fn read_btree(handle: Handle, op: ObjectPointer) -> Result<Vec<LeafNodeEntry>, failure::Error> {
+pub fn read_btree<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize>(handle: Handle, op: ObjectPointer) -> Result<Vec<NodeEntry<K, V>>, failure::Error> {
     let mut v = vec![];
-    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<K, V, B>(handle.clone()))?;
 
     match any_object {
         AnyObject::LeafNode(mut node) => {
@@ -774,7 +774,7 @@ pub fn read_btree(handle: Handle, op: ObjectPointer) -> Result<Vec<LeafNodeEntry
             debug_assert!(node.entries.len() <= BTREE_DEGREE); // b <= len <= 2b+1 with b=2 except root
 
             for n in node.entries {
-                let mut res = await!(read_btree(handle.clone(), n.value))?;
+                let mut res = await!(read_btree::<K, V, B>(handle.clone(), n.value))?;
                 v.append(&mut res);
             }
         }

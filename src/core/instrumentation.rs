@@ -131,7 +131,7 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
         }
 
         // read the btree, the data should now be sorted
-        await!(read_btree(handle.clone(), op.clone()))
+        await!(read_btree::<u64, u64, ConstUsize2>(handle.clone(), op.clone()))
     }
 }
 
@@ -186,7 +186,7 @@ fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operat
             };
 
             // read the cow btree
-            let cow_btree = await!(read_btree(handle.clone(), op.clone()))?;
+            let cow_btree = await!(read_btree::<u64, u64, ConstUsize2>(handle.clone(), op.clone()))?;
 
             // check that both btrees are the same
             for ((std_k, std_v), cow) in std_btree.iter().zip(cow_btree) {
