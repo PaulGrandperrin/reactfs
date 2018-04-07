@@ -351,9 +351,9 @@ pub fn insert_in_btree(handle: Handle, op: ObjectPointer, free_space_offset: u64
 }
 
 #[async(boxed)] // box not really needed
-pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, failure::Error> {
+pub fn get<K: Serializable + Ord + Copy + 'static, V: Serializable + Copy, B: ConstUsize>(handle: Handle, op: ObjectPointer, key: K) -> Result<Option<V>, failure::Error> {
     // read root node
-    let any_object = await!(op.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<K, V, B>(handle.clone()))?;
 
     match any_object {
         AnyObject::LeafNode(node) => {
@@ -384,7 +384,7 @@ pub fn get(handle: Handle, op: ObjectPointer, key: u64) -> Result<Option<u64>, f
                 Err(i) => i - 1, // match first bigger key
             };
 
-            await!(get(handle.clone(), node.entries[index].value.clone(), key))
+            await!(get::<K, V, B>(handle.clone(), node.entries[index].value.clone(), key))
         }
     }
 }
