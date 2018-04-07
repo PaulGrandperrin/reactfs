@@ -168,7 +168,7 @@ fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operat
                 }
                 Operation::Remove(k) => {
                     // remove in cow btree
-                    let res = await!(remove(
+                    let res = await!(remove::<u64, u64, ConstUsize2>(
                         handle.clone(),
                         op.clone(),
                         free_space_offset,

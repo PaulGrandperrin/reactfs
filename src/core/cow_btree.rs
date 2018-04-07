@@ -391,7 +391,9 @@ pub fn get<K: Serializable + Ord + Copy + 'static, V: Serializable + Copy, B: Co
 }
 
 #[async(boxed)] // box not really needed
-fn remove_in_leaf(handle: Handle, node: LeafNode, free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+fn remove_in_leaf<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>
+(handle: Handle, node: Node<K, V, B, Leaf>, free_space_offset: u64, key: K)
+-> Result<(ObjectPointer, u64, Option<V>), failure::Error> {
     /*
         Here, we have the following garanties:
         - All nodes have a least one neighbor to fully or partially merge with.
@@ -418,7 +420,9 @@ fn remove_in_leaf(handle: Handle, node: LeafNode, free_space_offset: u64, key: u
 }
 
 #[async(boxed)]
-fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+fn remove_in_internal<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static>
+(handle: Handle, node: Node<K, ObjectPointer, B, Internal>, mut free_space_offset: u64, key: K)
+-> Result<(ObjectPointer, u64, Option<V>), failure::Error> {
     /*
         Here, we have the following garanties:
         - All nodes have a least one neighbor to fully or partially merge with.
@@ -578,7 +582,7 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
                     unreachable!("cow_btree: all node should have at least one neighbor at any time!");
                 };
 
-                let mut neighbor = match await!(node.entries[neighbor_index].value.async_read_object::<u64, u64, ConstUsize2>(handle.clone()))? { // TODO: use trait
+                let mut neighbor = match await!(node.entries[neighbor_index].value.async_read_object::<K, V, B>(handle.clone()))? { // TODO: use trait
                     AnyObject::InternalNode(n) => *n,
                     AnyObject::LeafNode(_) => unreachable!("cow_btree: all sibling should be of the same kind")
                 };
@@ -698,7 +702,9 @@ fn remove_in_internal(handle: Handle, node: InternalNode, mut free_space_offset:
 
 // TODO: write a version that does not do any modifications if the entry to remove doesn't exist
 #[async(boxed)] // box not really needed
-pub fn remove(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: u64) -> Result<(ObjectPointer, u64, Option<u64>), failure::Error> {
+pub fn remove<K: Serializable + Ord + Copy + 'static, V: Serializable, B: ConstUsize>
+(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: K)
+-> Result<(ObjectPointer, u64, Option<V>), failure::Error> {
     /*
         Here, we have the following garanties:
         - All nodes have a least one neighbor to fully or partially merge with.
@@ -708,7 +714,7 @@ pub fn remove(handle: Handle, op: ObjectPointer, free_space_offset: u64, key: u6
     */
 
     // read pointed object
-    let any_object = await!(op.async_read_object(handle.clone()))?;
+    let any_object = await!(op.async_read_object::<K, V, B>(handle.clone()))?;
 
     let (op, new_free_space_offset, removed_value) = match any_object {
         AnyObject::LeafNode(node) => {
