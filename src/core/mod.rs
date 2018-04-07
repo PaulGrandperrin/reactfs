@@ -115,14 +115,6 @@ pub struct Node<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize, T:
     _t: PhantomData<T>,
 }
 
-// concrete btree types
-
-pub type LeafNodeEntry = NodeEntry<u64, u64>;
-pub type InternalNodeEntry = NodeEntry<u64, ObjectPointer>;
-
-pub type LeafNode = Node<u64, u64, ConstUsize2, Leaf>;
-pub type InternalNode = Node<u64, ObjectPointer, ConstUsize2, Internal>;
-
 // serialization trait
 
 pub trait Serializable: Sized {

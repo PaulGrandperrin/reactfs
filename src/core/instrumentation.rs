@@ -109,7 +109,7 @@ where F: Fn(Handle) -> Box<Future<Item=T, Error=E> + 'a>
     core.run(f)
 }
 
-fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> impl Future<Item=Vec<LeafNodeEntry>, Error=failure::Error> + 'f {
+fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> impl Future<Item=Vec<NodeEntry<u64, u64>>, Error=failure::Error> + 'f {
     async_block!{
         await!(format(handle.clone()))?;
         let uberblock = await!(find_latest_uberblock(handle.clone()))?;
@@ -121,7 +121,7 @@ fn async_btree_insert_and_read<'f>(handle: Handle, vec: &'f Vec<(u64, u64)>) -> 
                 handle.clone(),
                 op.clone(),
                 free_space_offset,
-                LeafNodeEntry::new(vec[i].0 as u64, vec[i].1 as u64)
+                NodeEntry::<u64, u64>::new(vec[i].0 as u64, vec[i].1 as u64)
                 ))?;
             op = res.0;
             free_space_offset = res.1;
@@ -155,7 +155,7 @@ fn async_btree_insert_and_remove_checked<'f>(handle: Handle, vec: &'f Vec<Operat
                         handle.clone(),
                         op.clone(),
                         free_space_offset,
-                        LeafNodeEntry::new(*k, *v)
+                        NodeEntry::<u64, u64>::new(*k, *v)
                         ))?;
                     op = res.0;
                     free_space_offset = res.1;

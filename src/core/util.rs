@@ -5,7 +5,7 @@ pub fn format(handle: Handle) -> Result<(), failure::Error> {
     let mut free_space_offset = 10 * BLOCK_SIZE as u64;
     
     // write tree
-    let mut tree = LeafNode::new();
+    let mut tree = Node::<u64, u64, ConstUsize2, Leaf>::new();
     let tree_offset = free_space_offset;
     let tree_len = await!(tree.async_write_at(handle.clone(), free_space_offset))?;
     free_space_offset += tree_len;
