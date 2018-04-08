@@ -120,19 +120,18 @@ impl<K: Serializable + Ord + Copy, V: Serializable, B: ConstUsize> NodeTrait<K, 
 impl<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: ConstUsize + 'static> Node<K, V, B, Leaf> {
     /// insert or go in entry then split 
     #[async(boxed)]  // box not really needed
-    fn insert_in_leaf_node
-    (handle: Handle, node: Node<K, V, B, Leaf>, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
+    fn insert_in_leaf_node(self, handle: Handle, free_space_offset: u64, entry_to_insert: NodeEntry<K, V>)
     -> Result<(NodeEntry<K, ObjectPointer>, u64, Option<V>), failure::Error> {
         
         // algo invariant: the entries should be sorted
-        debug_assert!(is_sorted(node.entries.iter().map(|l|{l.key})));
+        debug_assert!(is_sorted(self.entries.iter().map(|l|{l.key})));
 
-        let old_value = node.insert(entry_to_insert);
+        let old_value = self.insert(entry_to_insert);
 
         // COW node
-        let op = await!(node.cow(handle.clone(), &mut free_space_offset))?;
+        let op = await!(self.cow(handle.clone(), &mut free_space_offset))?;
 
-        let entry = NodeEntry::<K, ObjectPointer>::new(node.entries[0].key, op);
+        let entry = NodeEntry::<K, ObjectPointer>::new(self.entries[0].key, op);
 
         Ok((entry, free_space_offset, old_value))
     }
@@ -166,7 +165,7 @@ impl<K: Serializable + Ord + Copy + 'static, V: Serializable + 'static, B: Const
                 // algo invariant
                 debug_assert!(child_node.entries.len() >= B::USIZE && child_node.entries.len() <= btree_degree(B::USIZE)); // b <= len <= 2b+1 with b=2 except root
                 let old_value = if child_node.entries.len() < btree_degree(B::USIZE) { // pro-active splitting if the node has the maximum size
-                    let (child_entry, new_free_space_offset, old_value) = await!(Node::insert_in_leaf_node(handle.clone(), *child_node, free_space_offset, entry_to_insert))?;
+                    let (child_entry, new_free_space_offset, old_value) = await!(child_node.insert_in_leaf_node(handle.clone(), free_space_offset, entry_to_insert))?;
                     free_space_offset = new_free_space_offset;
 
                     // update current's node selected entry
@@ -254,14 +253,14 @@ fn leaf_split_and_insert<K: Serializable + Ord + Copy + 'static, V: Serializable
     // insert entry in either node
     let (left_entry, right_entry, old_value) = if entry_to_insert.key < right_node.entries[0].key { // are we smaller than the first element of the right half
         // TODO maybe inlining insert_in_internal_node code would be simpler
-        let (left_entry, new_free_space_offset, old_value) = await!(Node::insert_in_leaf_node(handle.clone(), left_node, free_space_offset, entry_to_insert))?;
+        let (left_entry, new_free_space_offset, old_value) = await!(left_node.insert_in_leaf_node(handle.clone(), free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let right_op = await!(right_node.cow(handle.clone(), &mut free_space_offset))?;
         let right_entry = NodeEntry::<K, ObjectPointer>::new(right_node.entries[0].key, right_op);
         (left_entry, right_entry, old_value)
     } else {
         // TODO maybe inlining insert_in_internal_node code would be simpler
-        let (right_entry, new_free_space_offset, old_value) = await!(Node::insert_in_leaf_node(handle.clone(), right_node, free_space_offset, entry_to_insert))?;
+        let (right_entry, new_free_space_offset, old_value) = await!(right_node.insert_in_leaf_node(handle.clone(), free_space_offset, entry_to_insert))?;
         free_space_offset = new_free_space_offset;
         let left_op = await!(left_node.cow(handle.clone(), &mut free_space_offset))?;
         let left_entry = NodeEntry::<K, ObjectPointer>::new(left_node.entries[0].key, left_op);
@@ -328,7 +327,7 @@ pub fn insert_in_btree<K: Serializable + Ord + Copy + 'static, V: Serializable +
                 let new_op = await!(new_root.cow(handle.clone(), &mut free_space_offset))?;
                 (new_op, free_space_offset, old_value)
             } else {
-                let (entry, free_space_offset, old_value) = await!(Node::insert_in_leaf_node(handle, *node, free_space_offset, entry_to_insert))?;
+                let (entry, free_space_offset, old_value) = await!(node.insert_in_leaf_node(handle, free_space_offset, entry_to_insert))?;
                 (entry.value, free_space_offset, old_value)
             }
         }
